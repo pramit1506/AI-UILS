@@ -1,11 +1,11 @@
 import { ConversationResponse } from '../types/chat';
 import { ClarificationPayload, ToolExecutionEvent } from '../types/agent';
-import { ComplaintDraft } from '../types/complaint';
+import { DynamicLogDraft } from '../types/log';
 
 export interface MappedConversation {
   assistantMessage: string;
   conversationId: string;
-  complaintDraft: ComplaintDraft | null;
+  logDraft: DynamicLogDraft | null;
   updatedFields: string[];
   clarificationRequired: ClarificationPayload | null;
   toolExecution: ToolExecutionEvent | null;
@@ -16,11 +16,11 @@ export const conversationMapper = {
   mapResponse(response: ConversationResponse): MappedConversation {
     const legacyResponse = response as any;
     const assistantMessage = response.assistant_message || legacyResponse.response || '';
-    const complaintDraft = response.complaint_draft || legacyResponse.complaint_updates || null;
+    const logDraft = response.log_draft || legacyResponse.complaint_draft || null;
     const draftChanges = response.draft_changes || [];
 
     let clarificationRequired: ClarificationPayload | null = null;
-    
+
     const clarificationState = response.clarification_state;
     const clarificationIsActive = Boolean(
       clarificationState &&
@@ -32,7 +32,7 @@ export const conversationMapper = {
       const missingField = clarificationState.missing_fields.length > 0 ? clarificationState.missing_fields[0] : undefined;
       const fallbackQuestion = missingField
         ? `Please provide the ${missingField.replace(/_/g, ' ')}.`
-        : assistantMessage || 'Please provide the missing complaint detail.';
+        : assistantMessage || 'Please provide the missing information.';
 
       clarificationRequired = {
         required: true,
@@ -40,22 +40,23 @@ export const conversationMapper = {
           response.decision_output?.clarification_message ||
           clarificationState.clarification_reason ||
           fallbackQuestion,
-        options: [], // Frontend ClarificationCard uses options if provided
-        field_name: missingField
+        options: [],
+        field_name: missingField,
       };
     }
 
     let toolExecution: ToolExecutionEvent | null = null;
     if (response.tool_execution_result) {
-      // Backend status might be "success", "failed", or "error". Map to ToolStatus.
       const statusStr = response.tool_execution_result.status?.toLowerCase();
       const status = statusStr === 'success' ? 'success' : 'error';
-      
+
       toolExecution = {
         tool_name: response.conversation_metadata?.last_tool || response.decision_output?.selected_tool || 'System Tool',
         status: status as 'success' | 'error',
         result: response.tool_execution_result.success_message || response.tool_execution_result.created_resource_id,
-        error: response.tool_execution_result.validation_warnings?.length ? response.tool_execution_result.validation_warnings.join(', ') : undefined
+        error: response.tool_execution_result.validation_warnings?.length
+          ? response.tool_execution_result.validation_warnings.join(', ')
+          : undefined,
       };
     } else if (legacyResponse.tool_executions?.length) {
       const legacyExecution = legacyResponse.tool_executions[0];
@@ -63,24 +64,22 @@ export const conversationMapper = {
         tool_name: legacyExecution.tool_name || 'System Tool',
         status: legacyExecution.status === 'success' ? 'success' : 'error',
         result: legacyExecution.result,
-        error: legacyExecution.error
+        error: legacyExecution.error,
       };
     }
 
     const updatedFields = draftChanges.length
       ? draftChanges.map(change => change.field_name)
-      : legacyResponse.complaint_updates
-        ? Object.keys(legacyResponse.complaint_updates).filter((key) => legacyResponse.complaint_updates[key] !== null)
-        : [];
+      : [];
 
     return {
       assistantMessage,
       conversationId: response.conversation_id,
-      complaintDraft,
+      logDraft,
       updatedFields,
       clarificationRequired,
       toolExecution,
-      conversationStatus: response.conversation_status
+      conversationStatus: response.conversation_status,
     };
-  }
+  },
 };

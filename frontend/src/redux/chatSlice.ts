@@ -4,7 +4,7 @@ import { chatService } from '../services/chatService';
 import { RootState } from './store';
 import { conversationMapper } from '../services/conversationMapper';
 import { setClarificationRequired, setToolExecutionResult, setConversationStatus } from './agentSlice';
-import { setComplaint } from './complaintSlice';
+import { setLog } from './logSlice';
 
 interface ChatState {
   messages: ChatMessage[];
@@ -33,13 +33,13 @@ export const sendMessage = createAsyncThunk<
         role: m.role,
         content: m.content
       }));
-      
+
       const request: ChatRequest = {
         user_message: message,
         conversation_id: state.chat.conversationId || undefined,
         message_history: history
       };
-      
+
       const response = await chatService.sendMessage(request);
       const data = response.data;
 
@@ -53,10 +53,10 @@ export const sendMessage = createAsyncThunk<
       }
       dispatch(setConversationStatus(mapped.conversationStatus));
 
-      // Dispatch mapped data to complaintSlice
-      dispatch(setComplaint({
-        draft: mapped.complaintDraft,
-        updatedFields: mapped.updatedFields
+      // Dispatch mapped data to logSlice
+      dispatch(setLog({
+        draft: mapped.logDraft,
+        updatedFields: mapped.updatedFields,
       }));
 
       return data;
@@ -92,9 +92,9 @@ const chatSlice = createSlice({
       })
       .addCase(sendMessage.fulfilled, (state, action) => {
         state.loading = false;
-        
+
         const mapped = conversationMapper.mapResponse(action.payload);
-        
+
         state.conversationId = mapped.conversationId;
         state.messages.push({
           id: Date.now().toString(),

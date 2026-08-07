@@ -1,6 +1,8 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppLayout } from './components/Layout/AppLayout';
+import { Header } from './components/Layout/Header';
+import { LogsDashboard } from './components/Dashboard/LogsDashboard';
 
 const NotFound: React.FC = () => (
   <div style={{ padding: '2rem', textAlign: 'center', marginTop: '10vh' }}>
@@ -14,6 +16,14 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<AppLayout />} />
+        <Route path="/logs" element={
+          <div className="app-layout">
+            <Header />
+            <main className="app-main">
+              <LogsDashboard />
+            </main>
+          </div>
+        } />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>

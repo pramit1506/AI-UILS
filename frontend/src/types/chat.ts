@@ -1,5 +1,5 @@
 import { ToolExecutionEvent, ClarificationPayload, ToolExecutionResult, ClarificationState, DecisionOutput, ConversationStatus, ConversationMetadata } from './agent';
-import { ComplaintDraft, DraftStatus } from './complaint';
+import { DynamicLogDraft, DraftStatus } from './log';
 
 export interface ChatMessage {
   id: string;
@@ -26,7 +26,7 @@ export interface FieldChange {
 export interface ConversationResponse {
   assistant_message: string;
   conversation_id: string;
-  complaint_draft?: ComplaintDraft;
+  log_draft?: DynamicLogDraft;
   draft_status?: DraftStatus;
   draft_changes: FieldChange[];
   clarification_state?: ClarificationState;

@@ -1,7 +1,7 @@
 from typing import Dict, Any, List
 from app.graph.state import GraphState
 from app.services.conversation_memory import conversation_memory_service
-from app.schemas.draft import ComplaintDraft
+from app.schemas.draft import DynamicLogDraft
 from app.schemas.memory import ClarificationState, ConversationSummary
 import json
 from datetime import date
@@ -27,7 +27,7 @@ class ContextBuilder:
         # Get metadata to determine complaint boundaries
         metadata = await conversation_memory_service.get_metadata(conversation_id)
         state_metadata = state.get("metadata", {})
-        start_idx = state_metadata.get("current_complaint_start_idx", 0)
+        start_idx = state_metadata.get("current_log_start_idx", 0)
         
         # Calculate how many messages belong to the current complaint
         current_message_count = metadata.message_count
@@ -46,7 +46,7 @@ class ContextBuilder:
         resolved_entities = await conversation_memory_service.repo.get_resolved_entities(conversation_id)
         
         # Gather data from current GraphState
-        draft = state.get("complaint_draft")
+        draft = state.get("log_draft")
         clarification = state.get("clarification_state")
         tool_result = state.get("tool_result")
         validation_errors = state.get("validation_errors")
@@ -107,8 +107,8 @@ class ContextBuilder:
         return f"### Conversation Metadata\n```json\n{metadata.model_dump_json(indent=2)}\n```"
 
     @staticmethod
-    def _format_draft(draft: ComplaintDraft) -> str:
-        return f"### Current Complaint Draft\n```json\n{draft.model_dump_json(indent=2)}\n```"
+    def _format_draft(draft: DynamicLogDraft) -> str:
+        return f"### Current Log Draft\n```json\n{draft.model_dump_json(indent=2)}\n```"
 
     @staticmethod
     def _format_clarification(clarification: ClarificationState) -> str:

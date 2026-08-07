@@ -1,7 +1,7 @@
 from typing import List, Dict, Optional, Any
 from pydantic import BaseModel, Field
 
-from app.schemas.draft import ComplaintDraft
+from app.schemas.draft import DynamicLogDraft
 from app.schemas.memory import ClarificationState, ConversationMetadata
 from app.schemas.decision import DecisionOutput
 from app.shared.enums import DraftStatus, ConversationStatus
@@ -30,7 +30,7 @@ class ToolExecutionResult(BaseModel):
 class ConversationResponse(BaseModel):
     assistant_message: str
     conversation_id: str
-    complaint_draft: Optional[ComplaintDraft] = None
+    log_draft: Optional[DynamicLogDraft] = None
     draft_status: Optional[DraftStatus] = None
     draft_changes: List[FieldChange] = Field(default_factory=list)
     clarification_state: Optional[ClarificationState] = None

@@ -1,39 +1,39 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { ComplaintDraft } from '../types/complaint';
+import { DynamicLogDraft } from '../types/log';
 
-interface ComplaintState {
-  currentComplaint: ComplaintDraft | null;
+interface LogState {
+  currentLog: DynamicLogDraft | null;
   lastUpdatedFields: string[];
   extractionStatus: 'idle' | 'extracting' | 'completed' | 'error';
 }
 
-const initialState: ComplaintState = {
-  currentComplaint: {},
+const initialState: LogState = {
+  currentLog: null,
   lastUpdatedFields: [],
   extractionStatus: 'idle',
 };
 
-const complaintSlice = createSlice({
-  name: 'complaint',
+const logSlice = createSlice({
+  name: 'log',
   initialState,
   reducers: {
-    setComplaint: (state, action: PayloadAction<{ draft: ComplaintDraft | null; updatedFields: string[] }>) => {
-      state.currentComplaint = action.payload.draft;
+    setLog: (state, action: PayloadAction<{ draft: DynamicLogDraft | null; updatedFields: string[] }>) => {
+      state.currentLog = action.payload.draft;
       state.lastUpdatedFields = action.payload.updatedFields;
     },
     clearUpdatedFields: (state) => {
       state.lastUpdatedFields = [];
     },
-    clearComplaint: (state) => {
-      state.currentComplaint = {};
+    clearLog: (state) => {
+      state.currentLog = null;
       state.lastUpdatedFields = [];
       state.extractionStatus = 'idle';
     },
     setExtractionStatus: (state, action: PayloadAction<'idle' | 'extracting' | 'completed' | 'error'>) => {
       state.extractionStatus = action.payload;
-    }
-  }
+    },
+  },
 });
 
-export const { setComplaint, clearUpdatedFields, clearComplaint, setExtractionStatus } = complaintSlice.actions;
-export default complaintSlice.reducer;
+export const { setLog, clearUpdatedFields, clearLog, setExtractionStatus } = logSlice.actions;
+export default logSlice.reducer;

@@ -1,19 +1,23 @@
 from typing import Any, Dict, List, Optional, TypedDict
 from pydantic import BaseModel
-from app.schemas.draft import ComplaintDraft
+from app.schemas.draft import DynamicLogDraft
 from app.schemas.decision import DecisionOutput
 from app.shared.enums import AgentState, ToolName, ConversationStatus
 from app.schemas.memory import ClarificationState
+
+
 class IntentOutput(BaseModel):
     intent: str
     confidence: float
-    
+
+
 class ToolSelectionOutput(BaseModel):
     tool_name: Optional[ToolName] = None
     tool_arguments: Optional[Dict[str, Any]] = None
 
+
 class GraphState(TypedDict):
-    complaint_draft: Optional[ComplaintDraft]
+    log_draft: Optional[DynamicLogDraft]
     changed_fields: Optional[List[str]]
     draft_status: Optional[str]
     conversation_id: str

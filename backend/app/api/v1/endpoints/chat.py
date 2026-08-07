@@ -60,15 +60,15 @@ async def chat_endpoint(
         metadata["message_count"] = metadata.get("message_count", 0) + 1
         metadata["last_activity"] = datetime.now(timezone.utc).isoformat()
         
-        draft = final_state.get("complaint_draft")
+        draft = final_state.get("log_draft")
         if draft:
-            metadata["active_customer"] = draft.customer_name or draft.customer_id
+            metadata["active_schema"] = draft.schema_name
             
         tool_result = final_state.get("tool_result")
-        if tool_result and isinstance(tool_result, dict) and "complaint_number" in tool_result:
-            metadata["active_complaint"] = tool_result.get("complaint_number")
+        if tool_result and isinstance(tool_result, dict) and "log_reference" in tool_result:
+            metadata["active_log_reference"] = tool_result.get("log_reference")
             if tool_result.get("id"):
-                metadata["active_complaint_id"] = str(tool_result.get("id"))
+                metadata["active_log_id"] = str(tool_result.get("id"))
             selected_tool = final_state.get("selected_tool")
             metadata["last_tool"] = selected_tool.value if hasattr(selected_tool, "value") else selected_tool
             

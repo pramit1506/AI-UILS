@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import { sendMessage, addUserMessage } from '../../redux/chatSlice';
-import { setExtractionStatus } from '../../redux/complaintSlice';
+import { setExtractionStatus } from '../../redux/logSlice';
 import { uploadService } from '../../services/uploadService';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
@@ -13,7 +13,7 @@ import './Chat.css';
 export const ChatPanel: React.FC = () => {
   const dispatch = useAppDispatch();
   const { messages, loading, error } = useAppSelector((state) => state.chat);
-  const { extractionStatus } = useAppSelector((state) => state.complaint);
+  const { extractionStatus } = useAppSelector((state) => state.log);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 

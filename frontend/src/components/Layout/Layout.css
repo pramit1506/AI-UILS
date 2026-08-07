@@ -11,7 +11,43 @@
   padding: var(--spacing-4) var(--spacing-6);
   display: flex;
   align-items: center;
+  justify-content: space-between;
   flex-shrink: 0;
+}
+
+.header-nav {
+  display: flex;
+  gap: var(--spacing-4);
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  text-decoration: none;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+}
+
+.nav-link:hover {
+  background-color: var(--color-background);
+  color: var(--color-primary);
+}
+
+.nav-link.active {
+  background-color: var(--color-primary);
+  color: white;
+}
+
+.nav-link.active .nav-icon {
+  opacity: 1;
+}
+
+.nav-icon {
+  font-size: 1.1rem;
 }
 
 .header-logo {
