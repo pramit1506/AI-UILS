@@ -8,7 +8,8 @@ from app.schemas.memory import ClarificationState
 
 class IntentOutput(BaseModel):
     intent: str
-    confidence: float
+    confidence: float = 1.0
+
 
 
 class ToolSelectionOutput(BaseModel):

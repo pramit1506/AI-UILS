@@ -24,23 +24,23 @@ class ContextBuilder:
         # Gather data from memory service
         summary = await conversation_memory_service.get_summary(conversation_id)
         
-        # Get metadata to determine complaint boundaries
+        # Get metadata to determine log boundaries
         metadata = await conversation_memory_service.get_metadata(conversation_id)
         state_metadata = state.get("metadata", {})
         start_idx = state_metadata.get("current_log_start_idx", 0)
         
-        # Calculate how many messages belong to the current complaint
+        # Calculate how many messages belong to the current log
         current_message_count = metadata.message_count
-        messages_in_current_complaint = max(0, current_message_count - start_idx)
+        messages_in_current_log = max(0, current_message_count - start_idx)
         
         # We always fetch a baseline limit, but if excluding history, we slice it
-        fetch_limit = messages_in_current_complaint if exclude_history and messages_in_current_complaint > 0 else 5
+        fetch_limit = messages_in_current_log if exclude_history and messages_in_current_log > 0 else 5
         # Fallback to at least fetching something if the math is 0, but slice logic will handle it
         recent_messages = await conversation_memory_service.get_recent_messages(conversation_id, limit=max(5, fetch_limit))
         
-        if exclude_history and messages_in_current_complaint > 0:
-            recent_messages = recent_messages[-messages_in_current_complaint:]
-        elif exclude_history and messages_in_current_complaint == 0:
+        if exclude_history and messages_in_current_log > 0:
+            recent_messages = recent_messages[-messages_in_current_log:]
+        elif exclude_history and messages_in_current_log == 0:
             recent_messages = []
             
         resolved_entities = await conversation_memory_service.repo.get_resolved_entities(conversation_id)

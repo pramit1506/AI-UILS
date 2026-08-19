@@ -1,74 +1,179 @@
-# Environment variables and secrets
+# ==============================================================================
+# AI-UILS - Comprehensive .gitignore for GitHub
+# ==============================================================================
+
+# ── Environment Variables & Credentials ──────────────────────────────────────
 .env
 .env.*
 !.env.example
+*.env
+*.env.*
+!*.env.example
 backend/.env
+backend/.env.*
+!backend/.env.example
 frontend/.env
+frontend/.env.*
+!frontend/.env.example
+*.pem
+*.key
+*.cer
+*.crt
+*.pfx
+*.p12
+*.kdbx
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+credentials.json
+client_secret*.json
+service-account*.json
+token.json
+tokens.json
 
-# Python virtual environments
+# ── Python Virtual Environments ──────────────────────────────────────────────
 .venv/
+*/.venv/
 venv/
+*/venv/
 env/
+*/env/
 ENV/
+env.bak/
+venv.bak/
+virtualenv/
 
-# Python cache and test artifacts
+# ── Python Cache, Bytecode & Build Artifacts ─────────────────────────────────
 __pycache__/
+*/__pycache__/
+*/**/__pycache__/
 *.py[cod]
 *$py.class
+*.egg-info/
+*/.eggs/
+.eggs/
+build/
+*/build/
+develop-eggs/
+downloads/
+eggs/
+.installed.cfg
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.manifest
+*.spec
+
+# ── Test & Coverage Artifacts ────────────────────────────────────────────────
 .pytest_cache/
+*/.pytest_cache/
+*/**/.pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.hypothesis/
 .coverage
+.coverage.*
 htmlcov/
-backend/tests/
+*/htmlcov/
+coverage/
+*/coverage/
+*.cover
+*.py,cover
+.tox/
+.nox/
+nosetests.xml
+coverage.xml
 
-# Node dependencies and frontend build output
+# ── Node / Frontend Dependencies & Build Output ──────────────────────────────
 node_modules/
 frontend/node_modules/
+*/node_modules/
 dist/
 frontend/dist/
-coverage/
-frontend/coverage/
-frontend/tests/
+*/dist/
+.npm/
+.eslintcache
+.stylelintcache
+.parcel-cache/
+.next/
+.nuxt/
+*.tsbuildinfo
+.vite/
+frontend/.vite/
 
-# Local database and runtime files
+# ── Databases, Dumps & Runtime Files ────────────────────────────────────────
 *.sqlite
 *.sqlite3
 *.db
+*.db3
+*.s3db
+*.dump
+*.sql.dump
 *.pid
 *.seed
+*.pid.lock
 
-# Logs and generated diagnostic output
+# ── Logs & Diagnostic Output ────────────────────────────────────────────────
 *.log
 logs/
+backend/logs/
+*/logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 *.out
 backend/test_output.txt
 project_structure.txt
 
-# OS and editor files
-.DS_Store
-Thumbs.db
-Desktop.ini
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# Codex/local agent workspace artifacts
+# ── AI Agent Workspaces & Local Artifacts ────────────────────────────────────
 .agents/
 .analysis_frames/
 .codex/
 .codex_runtime/
+.gemini/
+.claude/
+.cursor/
+.windsurf/
 
-# Media recordings and temporary exports
+# ── OS Generated Files ───────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+[Dd]esktop.ini
+
+# ── IDEs & Code Editors ──────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.sublime-workspace
+*.sublime-project
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# ── Media Recordings, Archives & Temporary Files ─────────────────────────────
 *.mp4
 *.mov
 *.avi
 *.mkv
 *.webm
-
-# Misc temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
 tmp/
 temp/
-*.tmp
-*.bak

@@ -1,48 +1,171 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* ═══════════════════════════════════════════════════════════════
+   UNIVERSAL LOG — Modern SaaS Design System (Linear / Vercel Dark)
+   ═══════════════════════════════════════════════════════════════ */
 
 :root {
-  --color-primary: #0284c7;
-  --color-primary-hover: #0369a1;
-  --color-surface: #ffffff;
-  --color-background: #f8fafc;
-  --color-text-primary: #0f172a;
-  --color-text-secondary: #475569;
-  --color-border: #e2e8f0;
-  --color-error: #ef4444;
-  --color-error-bg: #fef2f2;
-  --color-success: #10b981;
+  /* ── Brand & Dynamic Accent ─────────────────────────────────── */
+  --accent:               #6366f1;
+  --accent-hover:         #818cf8;
+  --accent-light:         #a5b4fc;
+  --accent-glow:          rgba(99, 102, 241, 0.28);
+  --accent-subtle:        rgba(99, 102, 241, 0.10);
+  --accent-border:        rgba(99, 102, 241, 0.25);
+  --accent-gradient:      linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
+  --accent-gradient-subtle: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.10));
+
+  /* ── Modern Zinc/Slate Surface Stack ───────────────────────── */
+  --color-background:     #09090b;       /* Zinc 950 base */
+  --color-surface:        #121316;       /* Elevated dark */
+  --color-surface-2:      #18191e;       /* Card/Panel surface */
+  --color-surface-3:      #22232a;       /* Highlight/Active surface */
+  --color-surface-hover:  rgba(255, 255, 255, 0.05);
   
-  --spacing-1: 0.25rem;
-  --spacing-2: 0.5rem;
-  --spacing-3: 0.75rem;
-  --spacing-4: 1rem;
-  --spacing-6: 1.5rem;
-  --spacing-8: 2rem;
-  
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  /* ── Translucent Glass & Borders ───────────────────────────── */
+  --color-glass:          rgba(255, 255, 255, 0.025);
+  --color-glass-card:     rgba(24, 25, 30, 0.75);
+  --color-glass-border:   rgba(255, 255, 255, 0.07);
+  --color-glass-border-lg:rgba(255, 255, 255, 0.13);
+  --color-glass-hover:    rgba(255, 255, 255, 0.04);
+  --color-border:         var(--color-glass-border);
+
+  /* ── Modern High-Legibility Typography ─────────────────────── */
+  --color-text-primary:   #f4f4f5;       /* Zinc 100 */
+  --color-text-secondary: #a1a1aa;       /* Zinc 400 */
+  --color-text-tertiary:  #71717a;       /* Zinc 500 */
+  --color-text-muted:     #52525b;       /* Zinc 600 */
+  --color-text-light:     #d4d4d8;       /* Zinc 300 */
+
+  /* ── Legacy Aliases ────────────────────────────────────────── */
+  --color-primary:        var(--accent);
+  --color-primary-hover:  var(--accent-hover);
+
+  /* ── Semantic System ───────────────────────────────────────── */
+  --color-success:        #10b981;       /* Emerald 500 */
+  --color-success-bg:     rgba(16, 185, 129, 0.10);
+  --color-success-border: rgba(16, 185, 129, 0.25);
+  --color-success-text:   #34d399;
+
+  --color-error:          #f43f5e;       /* Rose 500 */
+  --color-error-bg:       rgba(244, 63, 94, 0.10);
+  --color-error-border:   rgba(244, 63, 94, 0.25);
+  --color-error-text:     #fb7185;
+
+  --color-warning:        #f59e0b;       /* Amber 500 */
+  --color-warning-bg:     rgba(245, 158, 11, 0.10);
+  --color-warning-border: rgba(245, 158, 11, 0.25);
+  --color-warning-text:   #fbbf24;
+
+  --color-info:           #0ea5e9;       /* Sky 500 */
+  --color-info-bg:        rgba(14, 165, 233, 0.10);
+  --color-info-border:    rgba(14, 165, 233, 0.25);
+  --color-info-text:      #38bdf8;
+
+  /* ── Spacing Tokens ────────────────────────────────────────── */
+  --spacing-1:  0.25rem;
+  --spacing-2:  0.5rem;
+  --spacing-3:  0.75rem;
+  --spacing-4:  1rem;
+  --spacing-5:  1.25rem;
+  --spacing-6:  1.5rem;
+  --spacing-8:  2rem;
+  --spacing-10: 2.5rem;
+
+  /* ── Modern Geometry & Radii ───────────────────────────────── */
+  --radius-xs:   4px;
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-xl:   20px;
+  --radius-2xl:  28px;
+  --radius-full: 9999px;
+
+  /* ── Subtle Elevation & Layered Shadows ────────────────────── */
+  --shadow-xs:   0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-sm:   0 2px 6px rgba(0, 0, 0, 0.4);
+  --shadow-md:   0 6px 20px rgba(0, 0, 0, 0.5);
+  --shadow-lg:   0 12px 36px rgba(0, 0, 0, 0.65);
+  --shadow-glow: 0 0 28px var(--accent-glow);
+
+  /* ── Micro-Interaction Transitions ─────────────────────────── */
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 350ms;
 }
 
-* {
+/* ── Reset ──────────────────────────────────────────────────── */
+*, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
+/* ── Base ───────────────────────────────────────────────────── */
+html {
+  color-scheme: dark;
+}
+
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background-color: var(--color-background);
   color: var(--color-text-primary);
   line-height: 1.5;
+  letter-spacing: -0.012em;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #root {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Monospace Elements ─────────────────────────────────────── */
+code, kbd, pre, .font-mono {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* ── Modern Minimalist Scrollbar ────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* ── Selection ──────────────────────────────────────────────── */
+::selection {
+  background: rgba(99, 102, 241, 0.25);
+  color: #fff;
+}
+
+/* ── Focus visible ──────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ── Utility Badges & Shimmers ──────────────────────────────── */
+@keyframes subtle-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.65; transform: scale(0.96); }
+}
+
+@keyframes shimmer-sweep {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }

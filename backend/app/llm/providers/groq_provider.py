@@ -1,4 +1,5 @@
 import json
+import re
 import httpx
 from typing import Any, Dict, Optional, Type
 import groq
@@ -13,6 +14,13 @@ from app.exceptions.base import (
     InvalidAPIKeyException,
     ModelUnavailableException,
 )
+
+def _clean_think_tags(text: str) -> str:
+    """Removes <think>...</think> reasoning traces from LLM responses."""
+    if not text:
+        return ""
+    cleaned = re.sub(r'<think>[\s\S]*?</think>', '', text)
+    return cleaned.strip()
 
 class GroqProvider(BaseLLMProvider):
     def __init__(self):
@@ -69,7 +77,8 @@ class GroqProvider(BaseLLMProvider):
                 temperature=temperature if temperature is not None else settings.TEMPERATURE,
                 max_tokens=max_tokens or settings.MAX_TOKENS,
             )
-            return response.choices[0].message.content
+            raw_content = response.choices[0].message.content or ""
+            return _clean_think_tags(raw_content)
         except Exception as e:
             raise self._translate_exception(e)
 
@@ -87,7 +96,15 @@ class GroqProvider(BaseLLMProvider):
                 temperature=temperature if temperature is not None else 0.0,
                 response_format={"type": "json_object"}
             )
-            content = response.choices[0].message.content
-            return schema.model_validate_json(content)
+            raw_content = response.choices[0].message.content or ""
+            cleaned = _clean_think_tags(raw_content)
+            
+            # If JSON object is wrapped inside extra markdown or text, extract outermost JSON
+            if not cleaned.strip().startswith("{"):
+                match = re.search(r'\{[\s\S]*\}', raw_content)
+                if match:
+                    cleaned = match.group(0)
+                    
+            return schema.model_validate_json(cleaned)
         except Exception as e:
             raise self._translate_exception(e)

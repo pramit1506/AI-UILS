@@ -14,6 +14,7 @@ export interface ChatRequest {
   user_message: string;
   conversation_id?: string;
   message_history: { role: string; content: string }[];
+  log_draft?: DynamicLogDraft;
 }
 
 export interface FieldChange {

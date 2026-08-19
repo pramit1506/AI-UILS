@@ -1,8 +1,8 @@
 import React from 'react';
+import { HelpCircle, ArrowRight } from 'lucide-react';
 import { ClarificationPayload } from '../../types/agent';
 import { useAppDispatch } from '../../redux/hooks';
-import { sendMessage } from '../../redux/chatSlice';
-import { addUserMessage } from '../../redux/chatSlice';
+import { sendMessage, addUserMessage } from '../../redux/chatSlice';
 import './Chat.css';
 
 interface ClarificationCardProps {
@@ -22,7 +22,8 @@ export const ClarificationCard: React.FC<ClarificationCardProps> = ({ payload })
   return (
     <div className="clarification-card">
       <div className="clarification-question">
-        {payload.question || 'I need some clarification to proceed.'}
+        <HelpCircle size={14} className="clarification-icon" />
+        <span>{payload.question || 'I need some clarification to proceed.'}</span>
       </div>
       {payload.options && payload.options.length > 0 && (
         <div className="clarification-options">
@@ -32,7 +33,8 @@ export const ClarificationCard: React.FC<ClarificationCardProps> = ({ payload })
               className="clarification-option-btn"
               onClick={() => handleOptionSelect(option)}
             >
-              {option}
+              <span>{option}</span>
+              <ArrowRight size={11} />
             </button>
           ))}
         </div>

@@ -1,6 +1,7 @@
 import uuid
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from datetime import datetime
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LogRecordCreate(BaseModel):
@@ -12,23 +13,32 @@ class LogRecordCreate(BaseModel):
     summary: Optional[str] = None
     source: Optional[str] = None
     conversation_id: Optional[str] = None
+    user_id: Optional[uuid.UUID] = None
+    requires_review: bool = False
+    overall_confidence: Optional[float] = None
 
 
 class LogRecordUpdate(BaseModel):
     data: Optional[Dict[str, Any]] = None
     field_metadata: Optional[Dict[str, Any]] = None
     summary: Optional[str] = None
+    requires_review: Optional[bool] = None
+    overall_confidence: Optional[float] = None
 
 
 class LogRecordRead(BaseModel):
     id: uuid.UUID
     schema_name: str
-    domain: Optional[str]
+    domain: Optional[str] = None
     log_reference: str
-    data: Dict[str, Any]
-    summary: Optional[str]
-    source: Optional[str]
-    conversation_id: Optional[str]
+    data: Dict[str, Any] = Field(default_factory=dict)
+    summary: Optional[str] = None
+    source: Optional[str] = None
+    conversation_id: Optional[str] = None
+    user_id: Optional[uuid.UUID] = None
+    requires_review: bool = False
+    overall_confidence: Optional[float] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

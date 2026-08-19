@@ -1,195 +1,280 @@
+# AI-Powered Universal Information Logging System (AI-UILS)
 
-# AI-Powered Customer Complaint Management System
+A high-performance, domain-agnostic AI assistant and data capture platform that extracts structured information from unstructured text, documents, and natural language conversations, populating real-time editable records and persisting them into a flexible ledger.
 
-**AIVOA Round 1 AI Product Engineer Assignment**
+---
 
-## Assignment Overview
+## Overview
 
-This project is an AI-powered Customer Complaint Management System (CCMS) built for the pharmaceutical manufacturing industry. It fulfills the AIVOA Round 1 Assignment by providing a conversational AI Complaint Intake Assistant that extracts structured QMS (Quality Management System) data from natural language and auto-populates a Complaint Draft in real time.
+Traditional intake systems are rigid and bound to predefined schemas. **AI-UILS** is built to dynamically understand any document or unstructured input—such as invoices, medical records, resumes, contracts, incident reports, receipts, and customer inquiries—extract structured key-value pairs with confidence scoring, validate data integrity, and support interactive conversational refinement.
 
-## Project Features
+---
 
-- **Paste complaint text**: Users can provide complaint details via natural language chat input.
-- **AI-powered complaint extraction**: Automatically extracts critical entities (Origin, Customer Details, Product & Batch ID, Complaint Details).
-- **Auto-populate complaint form**: Live updates to the Complaint Draft on the frontend React UI.
-- **Complaint editing through AI chat**: Users can refine, correct, or remove details conversationally.
-- **Complaint Completeness Checker**: The AI assistant proactively asks for missing required information via a multi-turn clarification flow.
-- **AI Risk Assessment**: Generates initial severity and priority based on complaint context.
-- **Complaint Summary**: AI-generated concise summary of the reported complaint.
-- **CAPA Recommendation / Root Cause Recommendation**: Intelligent action recommendations based on complaint details.
-- **Save Complaint**: Persists the finalized Complaint Draft to the database.
+## Core Capabilities
+
+- **Dynamic Entity Extraction**: Automatically infers document domains and schemas, extracting structured fields with per-field confidence scores.
+- **Real-Time Interactive Drafts**: Live-synced editable log drafts on the frontend React UI as the user converses with the AI assistant.
+- **Conversational Refinement & Editing**: Update, correct, or add fields conversationally (e.g., *"Change invoice total to $500"* or *"Add vendor address"*).
+- **Proactive Clarification Engine**: The AI detects missing critical information and prompts the user with targeted questions.
+- **Review Queue & Confidence Badging**: Flags low-confidence extractions (`< 0.70`) for human-in-the-loop review with quick-action review workflows.
+- **Universal Search & Dashboard**: Full-text and schema-filtered search over historical log records stored in PostgreSQL (JSONB).
+- **Flexible LLM Provider Support**: Native integration with Groq, Cerebras , Gemini and OpenRouter for ultra-fast cloud inference and Ollama for fully local, private offline inference.
+- **Document & File Intake**: Supports text, paste, email, and document parsing with source attribution.
+
+---
 
 ## Technology Stack
 
-**Frontend**
-- React
-- Redux Toolkit
-- Vite
-- TypeScript
+### Frontend
+- **React 18** with **TypeScript**
+- **Redux Toolkit** for predictable centralized state management
+- **Vite** for build tooling
+- **Lucide React** for UI icons
+- **Vitest** & **React Testing Library** for frontend testing
 
-**Backend**
-- FastAPI
-- LangGraph (AI Agent Framework)
-- Groq LLM
-- PostgreSQL
-- SQLAlchemy
-- Python
+### Backend
+- **FastAPI** (Asynchronous Python Web Framework)
+- **LangGraph** (Stateful AI Agent Workflow & Decision Orchestration)
+- **Groq Cloud / Ollama** (LLM Providers)
+- **PostgreSQL 15+** with JSONB & GIN indexing for flexible schemas
+- **SQLAlchemy 2.0 (Asyncpg)** & **Alembic** for migrations
+- **Pydantic v2** for validation and data contracts
 
-## Project Architecture
+---
 
-The architecture decouples the frontend and backend. The React frontend maintains the state using Redux Toolkit and communicates with the FastAPI backend. The backend uses LangGraph as the AI Agent Framework to orchestrate the AI Workflow, handling entity extraction, decision making, multi-turn memory, and tool execution securely.
-
-## Folder Structure
+## System Architecture
 
 ```text
-AI CCMS/
-  backend/
-    app/
-      api/              FastAPI routes
-      core/             Application settings and logging
-      database/         Database base/session setup
-      graph/            LangGraph state, nodes, router, builder
-      llm/              LLM provider abstraction and Groq provider
-      models/           SQLAlchemy models
-      repositories/     Complaint Repository data access layer
-      schemas/          Pydantic request/response/domain schemas
-      services/         Complaint Services and business logic
-      tools/            Complaint Tools implementations
-      utils/            Response and draft helpers
-    tests/              Backend unit and integration tests
-    alembic/            Database migration setup
-
-  frontend/
-    src/
-      components/       React UI components
-      redux/            Redux Toolkit slices and store
-      services/         API client and response mapping
-      types/            TypeScript types
-    tests/              Frontend tests
+AI-UILS/
+├── backend/
+│   ├── alembic/              # Database migration scripts
+│   ├── app/
+│   │   ├── api/v1/           # REST endpoints (chat, logs, upload, health)
+│   │   ├── core/             # Configuration, settings, and logging
+│   │   ├── database/         # SQLAlchemy session & Base model definitions
+│   │   ├── graph/            # LangGraph agent state, nodes, routing, workflows
+│   │   ├── llm/              # LLM provider abstractions (Groq, Ollama)
+│   │   ├── models/           # SQLAlchemy ORM models (LogRecord)
+│   │   ├── repositories/     # Data access layer
+│   │   ├── schemas/          # Pydantic schemas (Draft, Chat, Memory, LogRecord)
+│   │   ├── services/         # Business logic (DraftService, MemoryService, DecisionService)
+│   │   ├── tools/            # Tool implementations (save_log, edit_log, summarize_log, search_logs)
+│   │   └── utils/            # Helper utilities and formatters
+│   ├── Dockerfile
+│   └── requirements.txt
+│
+├── frontend/
+│   ├── src/
+│   │   ├── components/       # UI components (Chat, LogForm, Dashboard, Layout)
+│   │   ├── hooks/            # Custom React hooks (shortcuts, review workflows)
+│   │   ├── redux/            # Redux slices (chat, log, agent, document)
+│   │   ├── services/         # API client & response mappers
+│   │   └── types/            # TypeScript interfaces
+│   ├── tests/                # Frontend test suites
+│   └── package.json
+│
+├── docs/                     # Technical specifications & API docs
+├── docker-compose.yml        # Multi-container deployment setup
+└── README.md
 ```
 
-## Installation Steps
+---
+
+## LangGraph Agent Workflow
+
+```text
+               ┌────────────────────────┐
+               │    User Message /      │
+               │   Document Intake      │
+               └───────────┬────────────┘
+                           │
+                           ▼
+               ┌────────────────────────┐
+               │       input_node       │
+               └───────────┬────────────┘
+                           │
+                           ▼
+               ┌────────────────────────┐
+               │       intent_node      │
+               └───────────┬────────────┘
+                           │
+              ┌────────────┴────────────┐
+              │                         │
+     [logging / update]           [conversation]
+              │                         │
+              ▼                         │
+   ┌───────────────────────┐            │
+   │ entity_extraction_node│            │
+   └──────────┬────────────┘            │
+              │                         │
+              ▼                         │
+   ┌───────────────────────┐            │
+   │     decision_node     │            │
+   └──────────┬────────────┘            │
+              │                         │
+     ┌────────┴────────┬────────┐       │
+     │                 │        │       │
+ [CLARIFY]     [EXECUTE_TOOL] [RESPOND] │
+     │                 │        │       │
+     │                 ▼        │       │
+     │      ┌─────────────────┐ │       │
+     │      │tool_selection_n.│ │       │
+     │      └────────┬────────┘ │       │
+     │               │          │       │
+     │               ▼          │       │
+     │      ┌─────────────────┐ │       │
+     │      │tool_execution_n.│ │       │
+     │      └────────┬────────┘ │       │
+     │               │          │       │
+     └───────────────┼──────────┘       │
+                     ▼                  │
+            ┌─────────────────┐         │
+            │  response_node  │◄────────┘
+            └────────┬────────┘
+                     │
+                     ▼
+            ┌─────────────────┐
+            │   Final State   │
+            │   & UI Update   │
+            └─────────────────┘
+```
+
+---
+
+## Installation & Setup
 
 ### Prerequisites
 
-- Python 3.12+
-- Node.js 18+
-- PostgreSQL
-- Groq API key
+- **Python 3.11+**
+- **Node.js 18+** & **npm**
+- **PostgreSQL 15+** (or Docker)
+- **Groq API Key** (or local **Ollama** installation)
 
-### Environment Variables
+---
 
-Create a backend environment file:
+### 1. Backend Setup
 
-```powershell
-cd backend
-copy .env.example .env
+1. Navigate to the `backend` directory:
+   ```bash
+   cd backend
+   ```
+
+2. Create and activate a virtual environment:
+   ```bash
+   # Windows (PowerShell)
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+
+   # Linux / macOS
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
+
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. Configure environment variables:
+   ```bash
+   copy .env.example .env   # Windows
+   cp .env.example .env     # Linux / macOS
+   ```
+
+   Update `.env` with your settings:
+   ```env
+   PROJECT_NAME="AI-Powered Universal Information Logging System"
+   DATABASE_URL="postgresql+asyncpg://username:password@localhost:5432/database_name"
+   GROQ_API_KEY="your-groq-api-key-here"
+   DEFAULT_MODEL="qwen/qwen3.6-27b"
+   LLM_PROVIDER="groq"
+   SECRET_KEY="your-secret-key-min-32-chars-long"
+   ```
+
+5. Run database migrations:
+   ```bash
+   alembic upgrade head
+   ```
+
+6. Start the FastAPI backend server:
+   ```bash
+   uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+   ```
+   API Docs available at: `http://127.0.0.1:8000/docs`
+
+---
+
+### 2. Frontend Setup
+
+1. Navigate to the `frontend` directory:
+   ```bash
+   cd frontend
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Start the development server:
+   ```bash
+   npm run dev -- --host 127.0.0.1 --port 5173
+   ```
+
+4. Open the application:
+   ```
+   http://127.0.0.1:5173
+   ```
+
+---
+
+## Running with Docker Compose
+
+To spin up the entire system (PostgreSQL, FastAPI Backend, and React Frontend) with Docker:
+
+```bash
+docker compose up --build
 ```
 
-Update `backend/.env` with your local values:
+- Frontend: `http://localhost:5173`
+- Backend API: `http://localhost:8000`
+- API Docs: `http://localhost:8000/docs`
 
-```env
-DATABASE_URL="postgresql+asyncpg://postgres:postgres@localhost:5432/ccms_db"
-GROQ_API_KEY="your-groq-api-key"
-DEFAULT_MODEL="llama-3.3-70b-versatile"
-```
+---
 
-Make sure the PostgreSQL database exists before starting the backend.
+## Testing
 
-### Running Backend
-
-From the project root:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
-cd backend
-..\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-```
-
-The backend runs at: `http://127.0.0.1:8000`
-
-### Running Frontend
-
-Open a second terminal:
-
-```powershell
+### Frontend Tests
+Run unit and integration tests using Vitest:
+```bash
 cd frontend
-npm install
-npm run dev -- --host 127.0.0.1 --port 5173
+npm test -- --run
 ```
 
-Open the app in the browser: `http://127.0.0.1:5173`
-
-## LangGraph Workflow
-
-User Input
-↓
-Chat Input Endpoint
-↓
-Text Extraction
-↓
-LangGraph
-↓
-Entity Extraction
-↓
-Complaint Draft
-↓
-Risk Assessment
-↓
-Complaint Form Update
-↓
-Save Complaint
-
-## AI Workflow
-
-The AI Workflow leverages a Decision Engine node in LangGraph. When a user sends a message, the LLM first extracts structured QMS entities. The Decision Engine then evaluates if the Complaint Draft is complete. If information is missing (Complaint Completeness Checker), it triggers a clarification flow. Once complete, it executes relevant tools (like Save Complaint or Risk Assessment) and translates the final state into a conversational response.
-
-## Complaint Upload Flow
-
-Currently, complaints can be pasted into the chat interface as text. The LangGraph workflow intercepts this text, processes it through the entity extraction prompt, and auto-populates the Complaint Draft on the UI.
-
-## Database Information
-
-The system utilizes PostgreSQL for persistent storage. SQLAlchemy acts as the ORM, with asynchronous support via asyncpg. Alembic manages database migrations. The primary records stored are the validated Customer Complaints and their associated metadata.
-
-## API Overview
-
-The AI-First Conversation API provides a unified REST interface. Every chat interaction automatically returns both the conversational response from the AI Complaint Intake Assistant and the latest structured Complaint Draft state, allowing the React frontend to reflect backend AI reasoning in real time.
-
-## Implemented AI Tools
-
-- `save_complaint`: Commits a new customer complaint record to the Complaint Database.
-- `edit_complaint`: Updates the active complaint record.
-- `generate_capa`: Generates Root Cause and CAPA Recommendations.
-- `summarize_complaint`: Creates a concise Complaint Summary.
-- `completeness_check`: Checks complaint content for missing mandatory fields and compliance.
-
-## Demo Instructions
-
-1. Launch frontend
-2. Launch backend
-3. Paste complaint text into the AI Complaint Intake Assistant
-4. AI extracts complaint details automatically
-5. Complaint form populates live on the screen
-6. Risk Assessment appears (Initial Severity, Priority)
-7. User edits complaint via chat (e.g., "Add a CAPA recommendation")
-8. Save Complaint triggers automatically or via explicit command
-9. Reset Form to clear the current draft and start a new complaint session
-
-## Known Limitations
-
-- Multi-turn conversation memory is currently held in-memory and resets on server restart.
-- Document parsing (PDF/OCR) is simulated via text paste capabilities as production-grade OCR was not required.
-- The UI handles a single active complaint session at a time.
-
-## Future Scope
-
-- Integration with pharmaceutical ERP systems (e.g., SAP) for live Batch validation.
-- Deployment of OCR services for native PDF/Email parsing.
-- Persistent conversation memory backed by vector databases.
-
-## Credits
-
-Developed for the AIVOA AI Product Engineer Assignment.
+### Backend Tests
+Run backend test suite using pytest:
+```bash
+cd backend
+pytest
 ```
+
+---
+
+## API Summary
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/v1/health/` | `GET` | Health check and system metadata |
+| `/api/v1/chat/` | `POST` | Process multi-turn conversational message and update draft |
+| `/api/v1/logs/` | `GET` | List saved log records with optional filtering |
+| `/api/v1/logs/search` | `GET` | Full-text search across log records |
+| `/api/v1/logs/{log_reference}` | `GET` | Retrieve specific log record by reference |
+| `/api/v1/logs/{log_reference}/review` | `PATCH` | Mark a log record as reviewed |
+| `/api/v1/upload/` | `POST` | Upload and parse document file |
+| `/api/v1/system-logs/` | `GET` | Retrieve system execution telemetry |
+
+---
+
+## License
+
+This project is licensed under the MIT License.

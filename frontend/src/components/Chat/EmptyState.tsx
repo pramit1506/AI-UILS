@@ -37,10 +37,8 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ onFileUpload, onPasteTex
       if (text && onPasteText) {
         onPasteText(text);
       }
-    } catch (err) {
-      console.error('Failed to read clipboard', err);
-      // Fallback for browsers that block clipboard API without explicit permission
-      const userInput = prompt("Please paste your complaint text here:");
+    } catch {
+      const userInput = prompt('Please paste your document text here:');
       if (userInput && onPasteText) {
         onPasteText(userInput);
       }
@@ -49,22 +47,28 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ onFileUpload, onPasteTex
 
   return (
     <div className="chat-empty-state-modern">
-      <h3 className="empty-title">AI Complaint Intake Assistant</h3>
+      <p className="empty-eyebrow">AI-Powered</p>
+      <h3 className="empty-title">Document Intelligence</h3>
       <p className="empty-subtitle">
-        Upload or paste a complaint below. The AI will extract the structured data and populate the form on the left.
+        Upload or paste any document — the AI extracts structured fields
+        and populates the form automatically.
       </p>
-      
+
       <div className="empty-cards-container">
-        <div 
+        <div
           className="empty-card"
           onDragOver={handleDragOver}
           onDrop={handleDrop}
           onClick={handleCardClick}
+          title="Upload a PDF, Word, or text file"
         >
-          <Upload size={32} className="card-icon" />
-          <div className="card-text">
-            Drag & drop complaint PDF or Email file here
+          <div className="card-icon-wrap">
+            <Upload size={24} className="card-icon" />
           </div>
+          <div className="card-text">
+            Upload a document
+          </div>
+          <div className="card-hint">PDF · DOCX · TXT · EML</div>
           <input
             type="file"
             ref={fileInputRef}
@@ -74,11 +78,18 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ onFileUpload, onPasteTex
           />
         </div>
 
-        <div className="empty-card" onClick={handlePasteCardClick}>
-          <FileText size={32} className="card-icon" />
-          <div className="card-text">
-            Or paste complaint text here
+        <div
+          className="empty-card"
+          onClick={handlePasteCardClick}
+          title="Paste text from clipboard"
+        >
+          <div className="card-icon-wrap">
+            <FileText size={24} className="card-icon" />
           </div>
+          <div className="card-text">
+            Paste document text
+          </div>
+          <div className="card-hint">From clipboard</div>
         </div>
       </div>
     </div>

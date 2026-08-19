@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from app.tools.base_tool import BaseTool
 from app.tools.context import ToolExecutionContext
 from app.repositories.log_record_repository import log_record_repository
+from fastapi.encoders import jsonable_encoder
 import uuid
 
 
@@ -57,7 +58,7 @@ class EditLogTool(BaseTool):
 
         # Merge field_updates into existing data
         merged_data = {**(record.data or {}), **field_updates}
-        await log_record_repository.update(context.db, db_obj=record, obj_in={"data": merged_data})
+        await log_record_repository.update(context.db, db_obj=record, obj_in={"data": jsonable_encoder(merged_data)})
 
         return {
             "log_reference": log_reference,

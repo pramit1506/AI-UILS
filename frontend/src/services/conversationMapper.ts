@@ -16,7 +16,7 @@ export const conversationMapper = {
   mapResponse(response: ConversationResponse): MappedConversation {
     const legacyResponse = response as any;
     const assistantMessage = response.assistant_message || legacyResponse.response || '';
-    const logDraft = response.log_draft || legacyResponse.complaint_draft || null;
+    const logDraft = response.log_draft || null;
     const draftChanges = response.draft_changes || [];
 
     let clarificationRequired: ClarificationPayload | null = null;

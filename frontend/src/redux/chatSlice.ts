@@ -11,6 +11,8 @@ interface ChatState {
   conversationId: string | null;
   loading: boolean;
   error: string | null;
+  /** ISO timestamp of when the first message of this session was sent */
+  sessionStartedAt: string | null;
 }
 
 const initialState: ChatState = {
@@ -18,6 +20,7 @@ const initialState: ChatState = {
   conversationId: null,
   loading: false,
   error: null,
+  sessionStartedAt: null,
 };
 
 export const sendMessage = createAsyncThunk<
@@ -37,7 +40,8 @@ export const sendMessage = createAsyncThunk<
       const request: ChatRequest = {
         user_message: message,
         conversation_id: state.chat.conversationId || undefined,
-        message_history: history
+        message_history: history,
+        log_draft: state.log.currentLog || undefined,
       };
 
       const response = await chatService.sendMessage(request);
@@ -71,6 +75,10 @@ const chatSlice = createSlice({
   initialState,
   reducers: {
     addUserMessage: (state, action: PayloadAction<string>) => {
+      // Record the session start time on the very first message
+      if (!state.sessionStartedAt) {
+        state.sessionStartedAt = new Date().toISOString();
+      }
       state.messages.push({
         id: Date.now().toString(),
         role: 'user',
@@ -82,6 +90,7 @@ const chatSlice = createSlice({
       state.messages = [];
       state.conversationId = null;
       state.error = null;
+      state.sessionStartedAt = null;
     }
   },
   extraReducers: (builder) => {

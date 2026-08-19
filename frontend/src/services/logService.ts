@@ -11,13 +11,18 @@ export interface LogRecord {
   field_metadata: Record<string, any>;
   created_at: string;
   updated_at: string;
+  requires_review: boolean;
+  overall_confidence: number | null;
 }
 
 export const logService = {
-  getLogs: async (schema_name?: string, skip = 0, limit = 50): Promise<LogRecord[]> => {
+  getLogs: async (schema_name?: string, skip = 0, limit = 50, needs_review?: boolean): Promise<LogRecord[]> => {
     const params: Record<string, any> = { skip, limit };
     if (schema_name) {
       params.schema_name = schema_name;
+    }
+    if (needs_review !== undefined) {
+      params.needs_review = needs_review;
     }
     const response = await apiClient.get('/logs/', { params });
     return response.data.data;
@@ -35,5 +40,15 @@ export const logService = {
   getLog: async (logReference: string): Promise<LogRecord> => {
     const response = await apiClient.get(`/logs/${logReference}`);
     return response.data.data;
+  },
+
+  markAsReviewed: async (logReference: string): Promise<LogRecord> => {
+    const response = await apiClient.patch(`/logs/${logReference}/review`);
+    return response.data.data;
+  },
+
+  deleteLog: async (logReference: string): Promise<void> => {
+    const response = await apiClient.delete(`/logs/${logReference}`);
+    return response.data;
   }
 };

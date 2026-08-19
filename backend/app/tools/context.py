@@ -11,7 +11,7 @@ class ToolExecutionContext(BaseModel):
     """
     model_config = ConfigDict(arbitrary_types_allowed=True)
     
-    db: AsyncSession
+    db: Optional[AsyncSession] = None
     request_id: str
     conversation_id: str
     logger: Any = logger

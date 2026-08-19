@@ -20,7 +20,7 @@ class ClarificationState(BaseModel):
 class ConversationSummary(BaseModel):
     active_customers: List[str] = Field(default_factory=list)
     hospitals: List[str] = Field(default_factory=list)
-    past_complaints: List[str] = Field(default_factory=list)
+    past_logs: List[str] = Field(default_factory=list)
     pending_work: List[str] = Field(default_factory=list)
     resolved_clarifications: List[str] = Field(default_factory=list)
     user_preferences: Dict[str, Any] = Field(default_factory=dict)
@@ -29,7 +29,7 @@ class ConversationSummary(BaseModel):
     @field_validator(
         "active_customers",
         "hospitals",
-        "past_complaints",
+        "past_logs",
         "pending_work",
         "resolved_clarifications",
         mode="before",
@@ -48,8 +48,8 @@ class ConversationSummary(BaseModel):
 class ConversationMetadata(BaseModel):
     active_customer: Optional[str] = None
     active_hospital: Optional[str] = None
-    active_complaint: Optional[str] = None
-    active_complaint_id: Optional[str] = None
+    active_log: Optional[str] = None
+    active_log_id: Optional[str] = None
     last_tool: Optional[str] = None
     conversation_start: datetime = Field(default_factory=get_utc_now)
     last_activity: datetime = Field(default_factory=get_utc_now)

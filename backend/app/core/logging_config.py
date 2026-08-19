@@ -1,5 +1,7 @@
 import logging
 import sys
+import os
+from datetime import datetime
 from loguru import logger
 from app.core.config import settings
 
@@ -35,12 +37,22 @@ def setup_logging() -> None:
         logging.getLogger(name).handlers = [InterceptHandler()]
         logging.getLogger(name).propagate = False
 
+    os.makedirs("logs", exist_ok=True)
+    start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file_path = f"logs/app_{start_time}.log"
+
     logger.configure(
         handlers=[
             {
                 "sink": sys.stdout,
                 "level": settings.LOG_LEVEL,
                 "format": "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+            },
+            {
+                "sink": log_file_path,
+                "level": settings.LOG_LEVEL,
+                "format": "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
+                "rotation": "10 MB",
             }
         ]
     )

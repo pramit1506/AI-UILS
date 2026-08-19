@@ -22,12 +22,27 @@ class FallbackTemplateService:
             if clarification and hasattr(clarification, "missing_fields") and clarification.missing_fields:
                 missing_fields = clarification.missing_fields
 
+        # Use the AI-written clarification message if available
+        if decision and getattr(decision, "clarification_message", None):
+            return decision.clarification_message
+
         if not missing_fields:
             return "I've updated the log draft. What else would you like to add or change?"
 
-        target_field = missing_fields[0]
-        question = f"Could you provide the {target_field.replace('_', ' ')}?"
-        return question
+        # Build a friendly message mentioning what we already have
+        draft = state.get("log_draft")
+        have_parts = []
+        if draft:
+            if draft.fields.get("vendor"):
+                have_parts.append(f"vendor ({draft.fields['vendor']})")  
+            if draft.fields.get("total_amount"):
+                have_parts.append(f"total amount ({draft.fields['total_amount']})")
+
+        target_field = missing_fields[0].replace("_", " ")
+        if have_parts and len(have_parts) <= 2:
+            have_str = " and ".join(have_parts)
+            return f"I have the {have_str}. Could you also provide the {target_field}?"
+        return f"Could you please provide the {target_field}?"
 
     @classmethod
     def generate_fallback_response(cls, state: GraphState) -> str:
@@ -40,13 +55,16 @@ class FallbackTemplateService:
 
         elif action == AgentAction.CONTINUE:
             changed_fields = state.get("changed_fields") or []
+            draft = state.get("log_draft")
             if changed_fields:
-                pretty_fields = ", ".join(field.replace("_", " ") for field in changed_fields)
-                return f"Updated {pretty_fields}. Please review the log form, then say 'save the log' when ready."
+                pretty_fields = ", ".join(field.replace("_", " ") for field in changed_fields[:4])
+                schema = draft.schema_name if draft and draft.schema_name else "document"
+                return f"Got it — I've captured the {pretty_fields} for your {schema}. Review the log form on the left, and say 'save the log' when you're ready."
             draft_status = state.get("draft_status")
             if str(draft_status) == "READY" or (hasattr(draft_status, "value") and draft_status.value == "READY"):
-                return "I've extracted the information from your document. Please review the log form on the left, then say 'save the log' when ready."
-            return "I've updated the log draft. Please provide any additional details so I can complete the form."
+                schema = draft.schema_name if draft and draft.schema_name else "document"
+                return f"Looks good! Your {schema} draft is ready. Review the fields on the left and say 'save the log' when you're happy with it."
+            return "I've updated the log draft. What other details can I add for you?"
 
         elif action == AgentAction.EXECUTE_TOOL:
             validation_errors = state.get("validation_errors") or []

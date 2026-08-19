@@ -3,6 +3,8 @@ import uiReducer from './uiSlice';
 import logReducer from './logSlice';
 import chatReducer from './chatSlice';
 import agentReducer from './agentSlice';
+import documentReducer from './documentSlice';
+import authReducer from './authSlice';
 
 export const store = configureStore({
   reducer: {
@@ -10,6 +12,8 @@ export const store = configureStore({
     log: logReducer,
     chat: chatReducer,
     agent: agentReducer,
+    document: documentReducer,
+    auth: authReducer,
   },
 });
 

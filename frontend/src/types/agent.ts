@@ -66,7 +66,7 @@ export interface DecisionOutput {
 export interface ConversationMetadata {
   active_customer?: string;
   active_hospital?: string;
-  active_complaint?: string;
+  active_log?: string;
   last_followup?: string;
   last_tool?: string;
   conversation_start: string;

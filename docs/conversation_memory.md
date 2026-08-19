@@ -1,14 +1,14 @@
 # Conversation Memory & Context Management
 
-This document outlines the architecture and lifecycle for handling multi-turn conversations and context management within the AI-First CCMS Customer Backend (Phase 2C).
+This document outlines the architecture and lifecycle for handling multi-turn conversations and context management within the AI-First Universal Information Logging System (UILS) Backend.
 
 ## Architecture
 
-The conversation memory feature adheres to the existing LangGraph orchestration by introducing three new components:
+The conversation memory feature adheres to the existing LangGraph orchestration by introducing three core components:
 
 1.  **`ConversationRepository`**: A data layer responsible for storing conversation histories, metadata, summaries, and extracted entities. Currently implemented in-memory to prevent database migrations during prototyping, but provides a standard async interface for future persistent data stores (e.g., PostgreSQL).
-2.  **`ConversationMemoryService`**: The core business logic service that manages memory. It handles appending messages, triggering summarizations, resolving contextual references (e.g., "him", "that complaint") based on previous turns, and calculating memory compression triggers.
-3.  **`ContextBuilder`**: A service exclusively responsible for assembling structured context strings (combining Conversation Summary, active Clarifications, Complaint Drafts, etc.) to be injected into LLM prompts.
+2.  **`ConversationMemoryService`**: The core business logic service that manages memory. It handles appending messages, triggering summarizations, resolving contextual references based on previous turns, and calculating memory compression triggers.
+3.  **`ContextBuilder`**: A service exclusively responsible for assembling structured context strings (combining Conversation Summary, active Clarifications, Log Drafts, etc.) to be injected into LLM prompts.
 
 ## `conversation_id` Lifecycle
 

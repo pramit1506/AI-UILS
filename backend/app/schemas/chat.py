@@ -11,6 +11,7 @@ class ChatRequest(BaseModel):
     user_message: str
     conversation_id: Optional[str] = None
     message_history: List[Dict[str, str]] = Field(default_factory=list)
+    log_draft: Optional[DynamicLogDraft] = None
 
 
 class FieldChange(BaseModel):

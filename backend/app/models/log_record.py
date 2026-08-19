@@ -1,8 +1,8 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, Text, DateTime
+from sqlalchemy import String, Text, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.base import Base
 from app.database.mixins import UUIDMixin, TimestampMixin
 
@@ -24,6 +24,9 @@ class LogRecord(UUIDMixin, TimestampMixin, Base):
     # The flexible JSON payload — stores all extracted field-value pairs
     data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
+    requires_review: Mapped[bool] = mapped_column(default=False, index=True)
+    overall_confidence: Mapped[float | None] = mapped_column()
+
     # AI confidence metadata per field
     field_metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
@@ -35,3 +38,9 @@ class LogRecord(UUIDMixin, TimestampMixin, Base):
 
     # Conversation that created this log
     conversation_id: Mapped[str | None] = mapped_column(String(100), index=True)
+
+    # Owner / User who captured and owns this log record
+    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True)
+
+    # Relationship back to User
+    user = relationship("User", back_populates="logs", foreign_keys=[user_id])

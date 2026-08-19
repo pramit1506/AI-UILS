@@ -15,7 +15,7 @@ from app.services.decision_service import decision_service
 from app.services.context_builder import context_builder
 from app.services.conversation_memory import conversation_memory_service
 from app.services.fallback_templates import fallback_templates
-from app.exceptions.base import ProviderException, InvalidAPIKeyException, ModelUnavailableException
+from app.exceptions.base import ProviderException, InvalidAPIKeyException, ModelUnavailableException, RateLimitException, AllProvidersExhaustedException
 from app.shared.enums import AgentAction
 from app.core.config import settings
 from loguru import logger
@@ -52,7 +52,11 @@ async def intent_node(state: GraphState) -> Dict[str, Any]:
         cancel_like = normalized_message in {
             "cancel", "cancel that", "cancel it", "stop", "nevermind", "never mind",
         }
-        if not cancel_like:
+        # Break out of clarification if the user issues a new explicit command
+        is_pivot = any(p in normalized_message for p in [
+            "summar", "save the log", "save log", "save", "process this uploaded document", "upload", "create new"
+        ])
+        if not cancel_like and not is_pivot:
             tool_name = clarification.tool_name or state.get("pending_tool") or state.get("selected_tool")
             logger.info(
                 f"[{state.get('request_id')}] Intent Node: Active clarification for {tool_name}; preserving workflow intent"
@@ -81,6 +85,27 @@ async def intent_node(state: GraphState) -> Dict[str, Any]:
         metadata = state.get("metadata", {}).copy()
         metadata["intent_confidence"] = intent_output.confidence
         return {"detected_intent": intent_output.intent, "metadata": metadata}
+    except AllProvidersExhaustedException as e:
+        logger.critical(f"[{state.get('request_id')}] Intent Node: ALL providers exhausted — {e}")
+        metadata = state.get("metadata", {}).copy()
+        metadata["all_providers_exhausted"] = True
+        return {
+            "detected_intent": "conversation",
+            "metadata": metadata,
+            "llm_response": (
+                "⚠️ All configured AI provider API keys have been exhausted "
+                "(rate-limited or invalid). The system automatically tried every "
+                "key across Groq, Cerebras, Gemini, and OpenRouter. "
+                "Please add new API keys to your .env file "
+                "(GROQ_API_KEY_1, CEREBRAS_API_KEY_1, GEMINI_API_KEY_1, "
+                "OPENROUTER_API_KEY_1) and restart the server."
+            ),
+        }
+    except (RateLimitException, InvalidAPIKeyException) as e:
+        logger.error(f"[{state.get('request_id')}] API Limit/Key Error in Intent Node: {e}")
+        metadata = state.get("metadata", {}).copy()
+        metadata["llm_unavailable"] = True
+        return {"detected_intent": _fallback_intent(state.get("user_message", "")), "metadata": metadata}
     except Exception as e:
         logger.error(f"[{state.get('request_id')}] Intent Node Error: {e}")
         metadata = state.get("metadata", {}).copy()
@@ -88,21 +113,33 @@ async def intent_node(state: GraphState) -> Dict[str, Any]:
         return {"detected_intent": _fallback_intent(state.get("user_message", "")), "metadata": metadata}
 
 
+
 def _fallback_intent(message: str) -> str:
+    import re
     text = (message or "").lower()
-    if len(text) > 100:
+    # Explicit document ingestion is ALWAYS save_log
+    if "process this uploaded document" in text or "uploaded document" in text:
         return "save_log"
-    if any(term in text for term in ["save", "log it", "store", "record", "process this uploaded document"]):
-        return "save_log"
-    if any(term in text for term in ["edit", "update", "change", "correct"]):
-        return "edit_log"
-    if any(term in text for term in ["find", "search", "look up", "retrieve", "recall"]):
-        return "search_logs"
-    if "summar" in text:
+    # Summarize triggers
+    if any(term in text for term in ["summar", "what have", "overview", "brief", "show summary"]):
         return "summarize_log"
+    # Explicit save triggers
+    if any(term in text for term in ["save the log", "save log", "log it", "store", "record", "log this", "please save", "can you log"]):
+        return "save_log"
+    # Search / retrieval triggers (use regex word boundaries to avoid matching 'findings')
+    if any(re.search(rf"\b{re.escape(term)}\b", text) for term in ["find", "search", "look up", "retrieve", "recall", "show me"]):
+        return "search_logs"
+    # Completeness check triggers
     if any(term in text for term in ["complete", "missing", "required fields", "check"]):
         return "completeness_check"
+    # Long message with structured content → document to save
+    if len(text) > 80:
+        return "save_log"
+    # Edit / correction triggers
+    if any(term in text for term in ["edit", "update", "change", "correct", "actually", "sorry", "wait"]):
+        return "save_log"
     return "conversation"
+
 
 
 def _is_update_message(text: str) -> bool:
@@ -116,14 +153,34 @@ def _is_update_message(text: str) -> bool:
     return any(marker in lowered for marker in update_markers)
 
 
+MONTH_MAP = {
+    "jan": 1, "january": 1,
+    "feb": 2, "february": 2,
+    "mar": 3, "march": 3,
+    "apr": 4, "april": 4,
+    "may": 5,
+    "jun": 6, "june": 6,
+    "jul": 7, "july": 7,
+    "aug": 8, "august": 8,
+    "sep": 9, "sept": 9, "september": 9,
+    "oct": 10, "october": 10,
+    "nov": 11, "november": 11,
+    "dec": 12, "december": 12,
+}
+
+
 def _parse_simple_date(value: str) -> str | None:
+    """Parse a date string into ISO 8601 YYYY-MM-DD format."""
     text = (value or "").strip()
     today = date.today()
     lowered = text.lower()
+
     if "today" in lowered:
         return today.isoformat()
     if "yesterday" in lowered:
         return (today - timedelta(days=1)).isoformat()
+
+    # ISO / numeric: 2026-11-03 or 3/11/2026
     patterns = [
         r"\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b",
         r"\b(\d{1,2})[-/](\d{1,2})[-/](\d{4})\b",
@@ -136,71 +193,340 @@ def _parse_simple_date(value: str) -> str | None:
         try:
             if idx == 0:
                 return date(parts[0], parts[1], parts[2]).isoformat()
-            return date(parts[2], parts[1], parts[0]).isoformat()
+            return date(parts[2], parts[0], parts[1]).isoformat()
         except ValueError:
             return None
+
+    # Named month: "November 3, 2026" / "3 November 2026" / "Aug 7th" / "Sept 14th"
+    month_pattern = re.compile(
+        r"""(?:(?P<day1>\d{1,2})\s*(?:st|nd|rd|th)?\s+(?P<month1>[A-Za-z]+)(?:\s*[,.]?\s*(?P<year1>\d{4}))?)|
+           (?:(?P<month2>[A-Za-z]+)\s+(?P<day2>\d{1,2})(?:st|nd|rd|th)?(?:\s*[,.]?\s*(?P<year2>\d{4}))?)""",
+        re.VERBOSE | re.IGNORECASE,
+    )
+    for m in month_pattern.finditer(text):
+        if m.group("month1"):
+            month_name = m.group("month1").lower()
+            day_str = m.group("day1")
+            year_str = m.group("year1")
+        else:
+            month_name = m.group("month2").lower()
+            day_str = m.group("day2")
+            year_str = m.group("year2")
+
+        month_num = MONTH_MAP.get(month_name) or MONTH_MAP.get(month_name[:3])
+        if not month_num:
+            continue
+        day = int(day_str)
+        year = int(year_str) if year_str else today.year
+        try:
+            return date(year, month_num, day).isoformat()
+        except ValueError:
+            continue
+
     return None
 
 
-def _fallback_extract_fields(message: str, existing_draft: DynamicLogDraft = None) -> Dict[str, Any]:
+def _normalize_amount(raw: str) -> str:
+    """Ensure monetary values are consistently formatted."""
+    cleaned = raw.strip().replace(",", "")
+    match = re.search(r"[\$€£]?\s*(\d+(?:\.\d+)?)", cleaned)
+    if match:
+        amount = float(match.group(1))
+        symbol = "$" if "$" in raw else ("€" if "€" in raw else ("£" if "£" in raw else "$"))
+        return f"{symbol}{amount:,.2f}"
+    return raw.strip()
+
+
+def _is_correction_message(text: str) -> bool:
+    """Detect if the message is EXPLICITLY correcting previously entered data."""
+    lowered = (text or "").lower()
+    if "process this uploaded document" in lowered:
+        return False
+    # Only explicit correction phrases — NOT general past-tense narrative
+    markers = [
+        "hold on", "oh, hold on", "oh hold on",
+        "actually,", "wait,", "wait—", "hold on—",
+        "correction:", "correct that", "not $", "not the ",
+        "should be", "was actually", "it's actually",
+        "rather than", "instead of",
+    ]
+    return any(m in lowered for m in markers)
+
+
+def _fallback_extract_fields(
+    message: str,
+    existing_draft: DynamicLogDraft = None,
+) -> tuple[dict, dict]:
     """
-    Domain-agnostic fallback extraction when LLM is unavailable.
-    Attempts to detect document type and extract common key-value patterns.
+    Domain-agnostic offline extraction engine.
+
+    Returns (extracted_fields, corrections):
+    - extracted_fields: new data to MERGE into the draft
+    - corrections: values the user is CORRECTING (override existing fields)
     """
     text = message or ""
-    fields: Dict[str, Any] = {}
-    schema_name = None
-    domain = None
-
-    # Detect document type
     lowered = text.lower()
-    if any(t in lowered for t in ["invoice", "vendor", "bill", "amount due", "payment"]):
-        schema_name = "Invoice"
-        domain = "Finance"
-    elif any(t in lowered for t in ["resume", "curriculum vitae", "work experience", "education", "skills"]):
-        schema_name = "Resume"
-        domain = "HR"
-    elif any(t in lowered for t in ["contract", "agreement", "parties", "clause", "whereas"]):
-        schema_name = "Contract"
-        domain = "Legal"
-    elif any(t in lowered for t in ["patient", "diagnosis", "prescription", "medical", "doctor"]):
-        schema_name = "Medical Record"
-        domain = "Healthcare"
-    elif any(t in lowered for t in ["receipt", "total", "subtotal", "tax", "purchase"]):
-        schema_name = "Receipt"
-        domain = "Finance"
-    elif any(t in lowered for t in ["complaint", "issue", "defect", "problem", "quality"]):
-        schema_name = "Complaint"
-        domain = "Quality Management"
-    else:
-        schema_name = "General Document"
-        domain = "General"
+    fields: Dict[str, Any] = {}
+    corrections: Dict[str, Any] = {}
+    is_correction = _is_correction_message(text)
 
-    # Source detection
+    # ── 1. Schema / domain detection (order matters — Invoice before Receipt) ──
+    schema_name: str | None = None
+    domain: str | None = None
+    existing_schema = existing_draft.schema_name if existing_draft else None
+
+    if not existing_schema or existing_schema == "General Document":
+        if any(t in lowered for t in ["invoice", "bill", "vendor", "billed", "invoiced"]):
+            schema_name = "Invoice"
+            domain = "Finance"
+        elif any(t in lowered for t in ["incident report", "product complaint", "defect report", "malfunction report", "adverse event", "complaint id", "complaint report", "quality assurance"]):
+            schema_name = "Complaint"
+            domain = "Quality Management"
+        elif any(t in lowered for t in ["patient", "diagnosis", "prescription", "clinical intake", "medical record", "doctor", "physician"]):
+            schema_name = "Medical Record"
+            domain = "Healthcare"
+        elif any(t in lowered for t in ["resume", "curriculum vitae", "work experience", "candidate profile"]):
+            schema_name = "Resume"
+            domain = "HR"
+        elif any(t in lowered for t in ["contract", "agreement", "parties", "clause", "whereas"]):
+            schema_name = "Contract"
+            domain = "Legal"
+        elif any(t in lowered for t in ["receipt", "subtotal", "purchase", "grocery"]):
+            schema_name = "Receipt"
+            domain = "Finance"
+        elif any(t in lowered for t in ["complaint", "issue", "problem", "defect"]):
+            schema_name = "Complaint"
+            domain = "Quality Management"
+        else:
+            schema_name = "General Document"
+            domain = "General"
+
+    # ── 2. Source detection ──────────────────────────────────────────────────
     if "uploaded document" in lowered or ".pdf" in lowered:
         fields["_source"] = "pdf"
     elif "email" in lowered or ".eml" in lowered:
         fields["_source"] = "email"
+    else:
+        fields["_source"] = "text"
 
-    # Generic key: value extraction from text (handles both multiline and single-line pasted text)
-    kv_pattern = re.compile(r"([A-Za-z0-9\s_\-\.\(\)/]{2,30}?)\s*:\s*([^:]+?)(?=\s+[A-Za-z0-9\s_\-\.\(\)/]{2,30}?\s*:|$)", re.IGNORECASE)
+    # ── 3. Structured KV extraction (handles "Key: Value" documents) ─────────
+    kv_pattern = re.compile(
+        r"^[ \t]*([A-Za-z][A-Za-z0-9 \t_\-\.\(\)/]{1,35}?)\s*:\s*([^\n\r]{1,200})$",
+        re.MULTILINE,
+    )
     for match in kv_pattern.finditer(text):
-        key_raw = match.group(1).strip()
-        value_raw = match.group(2).strip()
-        if not value_raw or len(value_raw) > 500:
+        key_raw = match.group(1).strip().rstrip()
+        value_raw = match.group(2).strip().rstrip(",;")
+        if not value_raw or len(value_raw) > 300:
             continue
-        # Normalize key to snake_case
+        # Skip instruction lines like "Process this uploaded document (sample.txt):"
+        if "process this uploaded document" in key_raw.lower():
+            continue
+        # Skip keys that are just sentence starters, too short, or look like sentence fragments
+        if len(key_raw) < 2 or key_raw.lower() in (
+            "hi", "hey", "please", "note", "re", "from", "to", "subject", "dear",
+            "ps", "etc", "i", "we", "they", "it",
+        ):
+            continue
+        # Skip if key contains verb-like words (likely a sentence, not a field label)
+        if re.search(r"\b(received|have|has|had|is|are|was|were|will|would|should|could|please|record|log)\b", key_raw, re.IGNORECASE):
+            continue
         key = re.sub(r"[^a-z0-9]+", "_", key_raw.lower()).strip("_")
+        # Normalize monetary values
+        if any(money in key for money in ("amount", "total", "price", "cost", "fee")):
+            value_raw = _normalize_amount(value_raw)
+        # Normalize dates (but NOT for "due" alone - that matches due_date column)
+        if any(dt in key for dt in ("date", "received", "issued", "billed")):
+            parsed = _parse_simple_date(value_raw)
+            if parsed:
+                value_raw = parsed
         if key and value_raw:
-            fields[key] = value_raw
+            if is_correction:
+                corrections[key] = value_raw
+            else:
+                fields[key] = value_raw
 
-    result = {}
+    # ── 4. Named-entity extraction for conversational / messy text ───────────
+    # Invoice number — match structured patterns like #INV-2026-8809, AMG-8841-X, NSS-9021
+    # First: explicit # prefix ("INVOICE #INV-2026-8809")
+    inv_match = re.search(
+        r"(?:INVOICE\s+#|invoice\s+#|#)([A-Z0-9][A-Z0-9\-]{2,20})",
+        text, re.IGNORECASE,
+    )
+    if not inv_match:
+        # Second: "invoice reference number is AMG-8841-X", "invoice number is NSS-9021"
+        # Each word is optional except 'number/no/#' which anchors the pattern
+        inv_match = re.search(
+            r"(?:invoice\s+)?(?:ref(?:erence)?\s+)?(?:number|no\.?|#)\s*(?:is\s+)?([A-Z][A-Z0-9\-]{2,20})",
+            text, re.IGNORECASE,
+        )
+    if inv_match:
+        val = inv_match.group(1).strip()
+        # Sanity-check: must look like a real code (has digit or dash, not a plain word)
+        if not re.search(r"[\d\-]", val):
+            inv_match = None
+    if inv_match:
+        val = inv_match.group(1).strip()
+        # Don't overwrite a clean value already found by KV extraction
+        dest = corrections if is_correction else fields
+        if "invoice_number" not in dest:
+            dest["invoice_number"] = val
+
+    # Vendor / company name
+    vendor_match = re.search(
+        r"(?:from|by|vendor(?:'s)?(?:\s+name)?(?:\s+is|\s+was)?|company|billed by|paid (?:to|the bill for))\s+([A-Z][A-Za-z0-9\s&\.,']{2,50}?)(?:\s*[,.]|\s+for|\s+the|\s+was|\s+has|$)",
+        text, re.IGNORECASE,
+    )
+    if vendor_match and "vendor" not in fields and "vendor" not in corrections:
+        vendor_name = vendor_match.group(1).strip().rstrip(",.")
+        stop_words = {"the", "a", "an", "this", "our", "your", "my", "us", "it"}
+        if vendor_name.lower() not in stop_words and len(vendor_name) > 2:
+            (corrections if is_correction else fields)["vendor"] = vendor_name
+
+    # Header-based vendor/company detection (e.g. "ACME INDUSTRIAL SUPPLY CORP" at the top of a document)
+    if "vendor" not in fields and "vendor" not in corrections:
+        for line in text.splitlines()[:5]:
+            line_str = line.strip()
+            if not line_str or len(line_str) < 3 or len(line_str) > 70:
+                continue
+            if any(w in line_str.lower() for w in ("process this", "uploaded document", "invoice", "receipt", "medical", "resume", "billed to", "patient", "phone:", "email:")):
+                continue
+            if re.search(r"\b(corp|corporation|inc|incorporated|llc|ltd|co|company|technologies|solutions|supply|group|logistics|health|hospital|clinic|associates)\b", line_str, re.IGNORECASE) or (line_str.isupper() and len(line_str.split()) >= 2):
+                (corrections if is_correction else fields)["vendor"] = line_str
+                break
+
+    # Customer / Billed To extraction
+    cust_match = re.search(
+        r"(?:billed\s+to|sold\s+to|customer(?:\s+name)?|client(?:\s+name)?)\s*:\s*\n?\s*([A-Za-z0-9\s&\.,'\-]{2,50}?)(?:\n|\r|$)",
+        text, re.IGNORECASE,
+    )
+    if cust_match and "customer_name" not in fields and "customer_name" not in corrections:
+        c_name = cust_match.group(1).strip().rstrip(",;")
+        if c_name.lower() not in ("attn", "accounts payable", "the", "a"):
+            (corrections if is_correction else fields)["customer_name"] = c_name
+
+    # Medical record patterns
+    if schema_name == "Medical Record" or "patient" in lowered:
+        pat_match = re.search(r"(?:patient(?:\s+name)?|patient\s*#|patient\s*id)\s*:\s*([A-Za-z0-9\s\.\-]{2,50}?)(?=\n|\r|$)", text, re.IGNORECASE)
+        if pat_match and "patient_name" not in fields and "patient_name" not in corrections:
+            fields["patient_name"] = pat_match.group(1).strip()
+
+        doc_match = re.search(r"(?:doctor(?:\s+name)?|physician|attending(?:\s+physician)?|dr\.)\s*:\s*([A-Za-z0-9\s\.\-]{2,50}?)(?=\n|\r|$)", text, re.IGNORECASE)
+        if doc_match and "doctor_name" not in fields and "doctor_name" not in corrections:
+            fields["doctor_name"] = doc_match.group(1).strip()
+
+        diag_match = re.search(r"(?:diagnosis|condition|assessment|chief\s+complaint)\s*:\s*([A-Za-z0-9\s\.,\-\(\)]{2,80}?)(?=\n|\r|$)", text, re.IGNORECASE)
+        if diag_match and "diagnosis" not in fields and "diagnosis" not in corrections:
+            fields["diagnosis"] = diag_match.group(1).strip()
+
+    # Resume patterns
+    if schema_name == "Resume" or "curriculum vitae" in lowered:
+        cand_match = re.search(r"(?:candidate(?:\s+name)?|name|applicant)\s*:\s*([A-Za-z\s\.\-]{2,50}?)(?=\n|\r|$)", text, re.IGNORECASE)
+        if cand_match and "candidate_name" not in fields and "candidate_name" not in corrections:
+            fields["candidate_name"] = cand_match.group(1).strip()
+
+    # Complaint patterns
+    if schema_name == "Complaint" or "complaint" in lowered:
+        prod_match = re.search(r"(?:product(?:\s+name)?|item(?:\s+name)?|device(?:\s+name)?)\s*:\s*([A-Za-z0-9\s\.\-]{2,50}?)(?=\n|\r|$)", text, re.IGNORECASE)
+        if prod_match and "product_name" not in fields and "product_name" not in corrections:
+            fields["product_name"] = prod_match.group(1).strip()
+
+        batch_match = re.search(r"(?:batch(?:\s+number|\s+no\.?)?|lot(?:\s+number|\s+no\.?)?)\s*:\s*([A-Za-z0-9\-_]{2,30}?)(?=\n|\r|$)", text, re.IGNORECASE)
+        if batch_match and "batch_number" not in fields and "batch_number" not in corrections:
+            fields["batch_number"] = batch_match.group(1).strip()
+
+    # Total amount extraction
+    # Check if total was already extracted by KV
+    kv_total = fields.get("total_amount_due") or fields.get("total_due") or fields.get("total_amount") or fields.get("total")
+    if kv_total and "total_amount" not in fields:
+        fields["total_amount"] = _normalize_amount(str(kv_total))
+
+    dest_key = corrections if is_correction else fields
+    if "total_amount" not in fields and "total_amount" not in corrections:
+        if is_correction:
+            corr_amount = re.search(
+                r"(?:actually|was|is now|should be)\s+\$?\s*([\d,]+(?:\.\d{1,2})?)",
+                text, re.IGNORECASE,
+            )
+            if corr_amount:
+                dest_key["total_amount"] = _normalize_amount(f"${corr_amount.group(1)}")
+            else:
+                any_amount = re.search(r"\$\s*([\d,]+(?:\.\d{1,2})?)", text)
+                if any_amount:
+                    dest_key["total_amount"] = _normalize_amount(f"${any_amount.group(1)}")
+        else:
+            # Explicit total patterns
+            total_m = re.search(
+                r"(?:total(?:\s+(?:invoice\s+)?amount(?:\s+due)?)?|total\s+due|grand\s+total|amount\s+due)\s*[:\s]?\s*\$?\s*([\d,]+(?:\.\d{1,2})?)",
+                text, re.IGNORECASE,
+            )
+            if total_m:
+                dest_key["total_amount"] = _normalize_amount(f"${total_m.group(1)}")
+
+    # Dates: grab all date-like strings and map to the right field names
+    date_contexts = [
+        (r"(?:due\s+(?:date|by|on))\s*[:\s]?\s*(.{5,25})", "due_date"),
+        (r"(?:received|receipt)\s+(?:date|on)\s*[:\s]?\s*(.{5,25})", "received_date"),
+        (r"(?:dated?|billed?(?:\s+back)?(?:\s+on)?)\s+(?:on\s+)?(.{5,25})", "invoice_date"),
+        (r"(?:date|Date)\s*:\s*(.{5,25})", "invoice_date"),
+    ]
+    for pattern, field_name in date_contexts:
+        if field_name in fields or field_name in corrections:
+            continue
+        m = re.search(pattern, text, re.IGNORECASE)
+        if m:
+            raw_date = m.group(1).strip().rstrip(",;.")
+            parsed = _parse_simple_date(raw_date)
+            if parsed:
+                (corrections if is_correction else fields)[field_name] = parsed
+
+    # Payment terms: "Net 30", "Net 45", "within 15 days"
+    pay_match = re.search(
+        r"(?:payment\s+terms?\s*[:\s]?|within\s+)(net\s*\d+|\d+\s*days?)",
+        text, re.IGNORECASE,
+    )
+    if pay_match:
+        pay_val = pay_match.group(1).strip()
+        (corrections if is_correction else fields)["payment_terms"] = pay_val
+
+    # Category / description / budget
+    cat_match = re.search(
+        r"(?:category|budget|department|under(?:\s+the)?)\s*[:\s]?([A-Za-z][\w\s&,]{3,60}?)(?=\.|,|$|\n)",
+        text, re.IGNORECASE,
+    )
+    if cat_match:
+        cat_val = cat_match.group(1).strip().rstrip(",.")
+        (corrections if is_correction else fields)["category"] = cat_val
+
+    # Description / purpose
+    desc_match = re.search(
+        r"(?:for(?:\s+the)?|description\s*:|regarding)\s+([A-Za-z][\w\s&,\-\.]{5,100}?)(?=\.|,|$|\n)",
+        text, re.IGNORECASE,
+    )
+    if desc_match and "description" not in fields and "description" not in corrections:
+        desc_val = desc_match.group(1).strip().rstrip(",.")
+        vendor_val = fields.get("vendor") or corrections.get("vendor") or ""
+        if desc_val.lower() not in vendor_val.lower():
+            (corrections if is_correction else fields)["description"] = desc_val
+
+    # Alias normalization
+    if "total_amount_due" in fields and "total_amount" not in fields:
+        fields["total_amount"] = fields["total_amount_due"]
+    if "vendor_name" in fields and "vendor" not in fields:
+        fields["vendor"] = fields["vendor_name"]
+    elif "vendor" in fields and "vendor_name" not in fields:
+        fields["vendor_name"] = fields["vendor"]
+
+    # ── 5. Build result ──────────────────────────────────────────────────────
+    result: Dict[str, Any] = {}
     if schema_name:
         result["schema_name"] = schema_name
     if domain:
         result["domain"] = domain
     result.update(fields)
-    return result
+
+    return result, corrections
+
 
 
 async def entity_extraction_node(state: GraphState) -> Dict[str, Any]:
@@ -227,30 +553,48 @@ async def entity_extraction_node(state: GraphState) -> Dict[str, Any]:
 
     if settings.DEMO_OFFLINE_MODE or (state.get("metadata") or {}).get("llm_unavailable"):
         current_draft = state.get("log_draft") or DynamicLogDraft()
-        extracted = _fallback_extract_fields(state.get("user_message", ""), current_draft)
-        if not extracted:
+        extracted, corrections = _fallback_extract_fields(state.get("user_message", ""), current_draft)
+        if not extracted and not corrections:
             return {}
 
         draft_service = DraftService()
-        metadata_dict = {
-            field: FieldMetadata(confidence=0.7, source="deterministic_demo")
-            for field in extracted
-            if not field.startswith("_")
-        }
-        result = draft_service.merge(current_draft, extracted, metadata=metadata_dict)
-        status_info = draft_service.validate(result.updated_draft)
+        all_changed: list[str] = []
+
+        # Apply new extracted fields
+        if extracted:
+            metadata_dict = {
+                field: FieldMetadata(confidence=0.75, source="deterministic_demo")
+                for field in extracted
+                if not field.startswith("_")
+            }
+            result = draft_service.merge(current_draft, extracted, metadata=metadata_dict)
+            current_draft = result.updated_draft
+            all_changed.extend(result.changed_fields)
+
+        # Apply corrections (override existing values)
+        if corrections:
+            for field, new_value in corrections.items():
+                meta = FieldMetadata(confidence=0.85, source="user_correction")
+                result = draft_service.correct_field(current_draft, field, new_value, metadata=meta)
+                current_draft = result.updated_draft
+                all_changed.extend(result.changed_fields)
+
+        all_changed = list(set(all_changed))
+        status_info = draft_service.validate(current_draft)
         metadata = state.get("metadata", {}).copy()
         metadata["llm_unavailable"] = True
         metadata["latest_extracted_fields"] = extracted
         metadata["latest_field_metadata"] = {
-            field: meta.model_dump() for field, meta in metadata_dict.items()
+            field: FieldMetadata(confidence=0.75, source="deterministic_demo").model_dump()
+            for field in extracted if not field.startswith("_")
         }
         return {
-            "log_draft": result.updated_draft,
-            "changed_fields": result.changed_fields,
+            "log_draft": current_draft,
+            "changed_fields": all_changed,
             "draft_status": status_info["status"].value,
             "metadata": metadata,
         }
+
 
     llm = get_llm_provider()
     extraction_prompt = load_prompt("entity_extraction.md")
@@ -293,6 +637,30 @@ async def entity_extraction_node(state: GraphState) -> Dict[str, Any]:
                 draft = result.updated_draft
                 all_changed_fields.extend(result.changed_fields)
 
+        if not draft.schema_name and intent == "save_log":
+            fallback_extracted, _ = _fallback_extract_fields(state.get("user_message", ""), draft)
+            inferred_schema = fallback_extracted.get("schema_name")
+            inferred_domain = fallback_extracted.get("domain")
+            
+            if inferred_schema and (inferred_schema != "General Document" or draft_service.has_any_data(draft)):
+                meta_schema = FieldMetadata(confidence=0.75, source="system_fallback")
+                meta_domain = FieldMetadata(confidence=0.75, source="system_fallback")
+                
+                result = draft_service.merge(
+                    draft, 
+                    {"schema_name": inferred_schema, "domain": inferred_domain}, 
+                    metadata={"schema_name": meta_schema, "domain": meta_domain}
+                )
+                draft = result.updated_draft
+                all_changed_fields.extend(result.changed_fields)
+                
+                if output.extracted_fields is None:
+                    output.extracted_fields = {}
+                output.extracted_fields["schema_name"] = inferred_schema
+                output.extracted_fields["domain"] = inferred_domain
+                output.field_metadata["schema_name"] = meta_schema.model_dump()
+                output.field_metadata["domain"] = meta_domain.model_dump()
+
         all_changed_fields = list(set(all_changed_fields))
         status_info = draft_service.validate(draft)
         draft_status = status_info["status"].value
@@ -308,31 +676,76 @@ async def entity_extraction_node(state: GraphState) -> Dict[str, Any]:
             "metadata": metadata,
         }
 
+    except AllProvidersExhaustedException as e:
+        logger.critical(f"[{state.get('request_id')}] Entity Extraction Node: ALL providers exhausted — {e}")
+        metadata = state.get("metadata", {}).copy()
+        metadata["all_providers_exhausted"] = True
+        # Still attempt deterministic extraction so partial data is preserved
+        extracted, corrections = _fallback_extract_fields(state.get("user_message", ""), current_draft)
+        if not extracted and not corrections:
+            return {"metadata": metadata}
+        draft_service = DraftService()
+        all_changed: list[str] = []
+        if extracted:
+            md = {f: FieldMetadata(confidence=0.55, source="deterministic_fallback") for f in extracted if not f.startswith("_")}
+            result = draft_service.merge(current_draft, extracted, metadata=md)
+            current_draft = result.updated_draft
+            all_changed.extend(result.changed_fields)
+        if corrections:
+            for field, new_value in corrections.items():
+                result = draft_service.correct_field(current_draft, field, new_value, metadata=FieldMetadata(confidence=0.65, source="fallback_correction"))
+                current_draft = result.updated_draft
+                all_changed.extend(result.changed_fields)
+        status_info = draft_service.validate(current_draft)
+        return {
+            "log_draft": current_draft,
+            "changed_fields": list(set(all_changed)),
+            "draft_status": status_info["status"].value,
+            "metadata": metadata,
+        }
+    except (RateLimitException, InvalidAPIKeyException) as e:
+        logger.error(f"[{state.get('request_id')}] API Limit/Key Error in Entity Extraction Node: {e}")
+
     except Exception as e:
         logger.error(f"[{state.get('request_id')}] Entity Extraction Error: {e}")
-        extracted = _fallback_extract_fields(
+        extracted, corrections = _fallback_extract_fields(
             state.get("user_message", ""),
             current_draft,
         )
-        if not extracted:
+        if not extracted and not corrections:
             return {}
 
         draft_service = DraftService()
-        metadata_dict = {
-            field: FieldMetadata(confidence=0.55, source="deterministic_fallback")
-            for field in extracted
-            if not field.startswith("_")
-        }
-        result = draft_service.merge(current_draft, extracted, metadata=metadata_dict)
-        status_info = draft_service.validate(result.updated_draft)
+        all_changed = []
+        
+        if extracted:
+            metadata_dict = {
+                field: FieldMetadata(confidence=0.55, source="deterministic_fallback")
+                for field in extracted
+                if not field.startswith("_")
+            }
+            result = draft_service.merge(current_draft, extracted, metadata=metadata_dict)
+            current_draft = result.updated_draft
+            all_changed.extend(result.changed_fields)
+            
+        if corrections:
+            for field, new_value in corrections.items():
+                meta = FieldMetadata(confidence=0.65, source="fallback_correction")
+                result = draft_service.correct_field(current_draft, field, new_value, metadata=meta)
+                current_draft = result.updated_draft
+                all_changed.extend(result.changed_fields)
+                
+        all_changed = list(set(all_changed))
+        status_info = draft_service.validate(current_draft)
         metadata = state.get("metadata", {}).copy()
         metadata["latest_extracted_fields"] = extracted
         metadata["latest_field_metadata"] = {
-            field: meta.model_dump() for field, meta in metadata_dict.items()
+            field: FieldMetadata(confidence=0.55, source="deterministic_fallback").model_dump()
+            for field in extracted if not field.startswith("_")
         }
         return {
-            "log_draft": result.updated_draft,
-            "changed_fields": result.changed_fields,
+            "log_draft": current_draft,
+            "changed_fields": all_changed,
             "draft_status": status_info["status"].value,
             "metadata": metadata,
         }
@@ -341,9 +754,93 @@ async def entity_extraction_node(state: GraphState) -> Dict[str, Any]:
 async def decision_node(state: GraphState) -> Dict[str, Any]:
     logger.info(f"[{state.get('request_id')}] Decision Node: Planning next step")
 
-    decision_output = await decision_service.determine_next_action(state)
+    try:
+        decision_output = await decision_service.determine_next_action(state)
+    except AllProvidersExhaustedException as e:
+        logger.critical(f"[{state.get('request_id')}] Decision Node: ALL providers exhausted — {e}")
+        from app.shared.enums import AgentAction, ToolReadiness, AgentState, ConversationStatus
+        from app.schemas.decision import DecisionOutput
+        metadata = state.get("metadata", {}).copy()
+        metadata["all_providers_exhausted"] = True
+        return {
+            "decision_output": DecisionOutput(
+                action=AgentAction.RESPOND,
+                tool_readiness=ToolReadiness.NOT_APPLICABLE,
+                selected_tool=None,
+                clarification_message=None,
+                clarification_reason=None,
+                required_missing_fields=[],
+                optional_missing_fields=[],
+                decision_confidence=0.0,
+                next_state=AgentState.IDLE,
+                reset_context=False
+            ),
+            "current_agent_state": AgentState.IDLE,
+            "conversation_status": ConversationStatus.COLLECTING_INFORMATION,
+            "metadata": metadata,
+            "llm_response": (
+                "⚠️ All configured AI provider API keys have been exhausted. "
+                "Please add new API keys to your .env file and restart the server."
+            ),
+        }
+    except (RateLimitException, InvalidAPIKeyException) as e:
+        logger.error(f"[{state.get('request_id')}] API Limit/Key Error in Decision Node: {e}")
+        from app.shared.enums import AgentAction, ToolReadiness, AgentState, ConversationStatus
+        from app.schemas.decision import DecisionOutput
+        return {
+            "decision_output": DecisionOutput(
+                action=AgentAction.RESPOND,
+                tool_readiness=ToolReadiness.NOT_APPLICABLE,
+                selected_tool=None,
+                clarification_message=None,
+                clarification_reason=None,
+                required_missing_fields=[],
+                optional_missing_fields=[],
+                decision_confidence=0.0,
+                next_state=AgentState.IDLE,
+                reset_context=False
+            ),
+            "current_agent_state": AgentState.IDLE,
+            "conversation_status": ConversationStatus.COLLECTING_INFORMATION,
+            "llm_response": "The API limits are over or the API key is invalid. Please provide a new API key."
+        }
 
     from app.shared.enums import ConversationStatus, ClarificationLifecycle, AgentAction, ToolReadiness
+
+    # ── BUG-001 fix: prune required_missing_fields that are already satisfied ──
+    # The entity_extraction_node runs before this node in the same turn.  If the
+    # LLM's decision was computed against a *stale* draft snapshot it may still
+    # list fields like schema_name as missing even though they were just set.
+    # Re-validate against the *current* draft so the clarification is accurate.
+    current_draft_now = state.get("log_draft")
+    if current_draft_now and decision_output.required_missing_fields:
+        pruned_missing: list[str] = []
+        for field in decision_output.required_missing_fields:
+            # Check top-level draft attributes first (schema_name, domain, source)
+            if field in ("schema_name", "domain", "source"):
+                val = getattr(current_draft_now, field, None)
+            else:
+                val = (current_draft_now.fields or {}).get(field)
+            if val is None or (isinstance(val, str) and not val.strip()):
+                pruned_missing.append(field)
+        if pruned_missing != decision_output.required_missing_fields:
+            logger.info(
+                f"[{state.get('request_id')}] Decision Node (BUG-001 fix): "
+                f"Pruned satisfied fields from missing list. "
+                f"Before={decision_output.required_missing_fields}, After={pruned_missing}"
+            )
+            decision_output.required_missing_fields = pruned_missing
+            # If all required fields are now satisfied, upgrade CLARIFY → EXECUTE_TOOL
+            if not pruned_missing and decision_output.action == AgentAction.CLARIFY:
+                from app.shared.enums import ToolReadiness as TR, AgentState
+                decision_output.action = AgentAction.EXECUTE_TOOL
+                decision_output.tool_readiness = TR.READY
+                decision_output.next_state = AgentState.READY_TO_EXECUTE
+                logger.info(
+                    f"[{state.get('request_id')}] Decision Node (BUG-001 fix): "
+                    f"Upgraded action from CLARIFY → EXECUTE_TOOL (all required fields satisfied)."
+                )
+
     conversation_status = ConversationStatus.COLLECTING_INFORMATION
     if decision_output.action == AgentAction.CLARIFY:
         conversation_status = ConversationStatus.AWAITING_CLARIFICATION
@@ -494,6 +991,27 @@ async def tool_selection_node(state: GraphState) -> Dict[str, Any]:
             "selected_tool": tool.name,
             "tool_arguments": output.tool_arguments,
         }
+    except AllProvidersExhaustedException as e:
+        logger.critical(f"[{state.get('request_id')}] Tool Selection Node: ALL providers exhausted — {e}")
+        from app.shared.enums import ConversationStatus
+        metadata = state.get("metadata", {}).copy()
+        metadata["all_providers_exhausted"] = True
+        return {
+            "tool_arguments": {},
+            "tool_status": "failed",
+            "validation_errors": ["All LLM providers exhausted — cannot select tool arguments."],
+            "conversation_status": ConversationStatus.COLLECTING_INFORMATION,
+            "metadata": metadata,
+        }
+    except (RateLimitException, InvalidAPIKeyException) as e:
+        logger.error(f"[{state.get('request_id')}] API Limit/Key Error in Tool Selection Node: {e}")
+        from app.shared.enums import ConversationStatus
+        return {
+            "tool_arguments": {},
+            "tool_status": "failed",
+            "validation_errors": [f"API Limit/Key Error: {str(e)}"],
+            "conversation_status": ConversationStatus.COLLECTING_INFORMATION,
+        }
     except Exception as e:
         logger.error(f"[{state.get('request_id')}] Tool Selection Error: {e}")
         from app.shared.enums import ConversationStatus
@@ -503,6 +1021,7 @@ async def tool_selection_node(state: GraphState) -> Dict[str, Any]:
             "validation_errors": [f"Tool selection failed: {str(e)}"],
             "conversation_status": ConversationStatus.COLLECTING_INFORMATION,
         }
+
 
 
 async def tool_execution_node(state: GraphState, config: RunnableConfig) -> Dict[str, Any]:
@@ -545,6 +1064,23 @@ async def tool_execution_node(state: GraphState, config: RunnableConfig) -> Dict
                 "conversation_status": ConversationStatus.COLLECTING_INFORMATION,
             }
         tool_args = {**tool_args, "log_reference": active_log_ref}
+
+    # Special handling: inject fields and metadata into save_log
+    if tool_name_value == "save_log":
+        if "fields" not in tool_args:
+            tool_args["fields"] = draft.fields
+        if "schema_name" not in tool_args and draft.schema_name:
+            tool_args["schema_name"] = draft.schema_name
+        if "domain" not in tool_args and draft.domain:
+            tool_args["domain"] = draft.domain
+        if "source" not in tool_args and draft.source:
+            tool_args["source"] = draft.source
+        if "field_metadata" not in tool_args:
+            # Convert FieldMetadata pydantic models to dicts
+            tool_args["field_metadata"] = {
+                k: (v.model_dump() if hasattr(v, "model_dump") else v)
+                for k, v in draft.field_metadata.items()
+            }
 
     logger.info(f"[{state.get('request_id')}] Executing tool: {tool_name}")
 
@@ -631,27 +1167,106 @@ async def response_node(state: GraphState) -> Dict[str, Any]:
         tool_status = state.get("tool_status")
         validation_errors = state.get("validation_errors")
 
-        system_prompt = load_prompt("system.md")
-        response_prompt = load_prompt("response.md").format(user_message=state["user_message"])
+        # ── BUG-004 fix: AI Risk Assessment for QMS / Complaint / Healthcare saves ──
+        # Detect a successful save_log for a complaint or quality management domain
+        # and switch to the dedicated risk_assessment prompt so the response includes
+        # severity, priority, root cause hypothesis, CAPA recommendations, and
+        # regulatory flag instead of a generic "saved successfully" message.
+        is_qms_save = False
+        if (
+            tool_result
+            and tool_status == "success"
+            and isinstance(tool_result, dict)
+            and tool_result.get("log_reference")
+        ):
+            draft = state.get("log_draft")
+            schema = (draft.schema_name or "").lower() if draft else ""
+            domain = (draft.domain or "").lower() if draft else ""
+            qms_schemas = {
+                "product complaint", "complaint", "quality complaint",
+                "adverse event", "medical incident", "quality incident",
+                "deviation", "oos", "out of specification",
+            }
+            qms_domains = {"quality management", "healthcare", "pharmaceutical", "medical", "qms"}
+            if (
+                any(s in schema for s in qms_schemas)
+                or any(d in domain for d in qms_domains)
+            ):
+                is_qms_save = True
 
-        if tool_result:
-            response_prompt += f"\n\nTool Result ({tool_status}):\n{json.dumps(tool_result, indent=2, default=str)}"
-        elif validation_errors:
-            response_prompt += f"\n\nTool Execution Failed with validation errors:\n{json.dumps(validation_errors)}"
+        if is_qms_save and tool_result:
+            # Build a compact JSON representation of what was saved for the prompt
+            draft = state.get("log_draft")
+            saved_fields = {}
+            if draft:
+                saved_fields = {
+                    "schema": draft.schema_name,
+                    "domain": draft.domain,
+                    **{k: v for k, v in (draft.fields or {}).items() if not k.startswith("_")},
+                }
+            log_data_str = json.dumps(saved_fields, indent=2, default=str)
+            log_reference = tool_result.get("log_reference", "LOG-UNKNOWN")
 
-        messages = [
-            {"role": "system", "content": system_prompt + "\n\n" + context_str},
-            {"role": "user", "content": response_prompt}
-        ]
+            try:
+                risk_prompt = load_prompt("risk_assessment.md").format(
+                    log_reference=log_reference,
+                    log_data=log_data_str,
+                )
+                messages = [
+                    {"role": "system", "content": risk_prompt},
+                    {"role": "user", "content": f"Generate the risk assessment for {log_reference}."}
+                ]
+                logger.info(
+                    f"[{state.get('request_id')}] Response Node: Generating AI Risk Assessment "
+                    f"for QMS save {log_reference}."
+                )
+            except Exception as e:
+                logger.warning(
+                    f"[{state.get('request_id')}] Response Node: Could not load risk_assessment.md ({e}); "
+                    f"falling back to standard response prompt."
+                )
+                is_qms_save = False  # fall through to standard prompt
+
+        if not is_qms_save:
+            system_prompt = load_prompt("system.md")
+            response_prompt = load_prompt("response.md").format(user_message=state["user_message"])
+
+            if tool_result:
+                response_prompt += f"\n\nTool Result ({tool_status}):\n{json.dumps(tool_result, indent=2, default=str)}"
+            elif validation_errors:
+                response_prompt += f"\n\nTool Execution Failed with validation errors:\n{json.dumps(validation_errors)}"
+
+            messages = [
+                {"role": "system", "content": system_prompt + "\n\n" + context_str},
+                {"role": "user", "content": response_prompt}
+            ]
 
     try:
         response = await llm.generate_response(messages=messages)
+    except AllProvidersExhaustedException as e:
+        logger.critical(f"[{state.get('request_id')}] Response Node: ALL providers exhausted — {e}")
+        metadata = state.get("metadata", {}).copy()
+        metadata["all_providers_exhausted"] = True
+        response = (
+            "⚠️ All configured AI provider API keys have been exhausted "
+            "(rate-limited or invalid). The system automatically tried every "
+            "key across Groq, Cerebras, Gemini, and OpenRouter.\n\n"
+            "**To recover:** Add new API keys to your `backend/.env` file:\n"
+            "```\nGROQ_API_KEY_1=gsk_...\n"
+            "CEREBRAS_API_KEY_1=csk-...\n"
+            "GEMINI_API_KEY_1=AIza...\n"
+            "OPENROUTER_API_KEY_1=sk-or-...\n```\n"
+            "Then restart the backend server."
+        )
+    except (RateLimitException, InvalidAPIKeyException) as e:
+        logger.error(f"[{state.get('request_id')}] Response Node: API Limit/Key Error ({type(e).__name__}): {e}.")
+        response = fallback_templates.generate_fallback_response(state)
+    except ModelUnavailableException as e:
+        logger.error(f"[{state.get('request_id')}] Response Node: Model Unavailable ({type(e).__name__}): {e}.")
+        response = "I'm currently unable to process your request because the AI model is unavailable. Please try again later."
     except ProviderException as e:
         logger.warning(f"[{state.get('request_id')}] Response Node: Transient provider error ({type(e).__name__}): {e}. Using deterministic fallback.")
         response = fallback_templates.generate_fallback_response(state)
-    except (InvalidAPIKeyException, ModelUnavailableException) as e:
-        logger.error(f"[{state.get('request_id')}] Response Node: Permanent provider configuration error ({type(e).__name__}): {e}.")
-        response = "I'm currently unable to process your request because the AI service is unavailable or incorrectly configured. Please contact support."
 
     if state.get("conversation_id"):
         await conversation_memory_service.append_message(state["conversation_id"], "assistant", response)
@@ -662,3 +1277,4 @@ async def response_node(state: GraphState) -> Dict[str, Any]:
 async def output_node(state: GraphState) -> Dict[str, Any]:
     logger.info(f"[{state.get('request_id')}] Output Node: Finalizing response")
     return {}
+

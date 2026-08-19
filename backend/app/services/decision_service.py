@@ -87,7 +87,11 @@ class AgentDecisionService:
 
         tool = tool_registry.get_tool(pending_tool_name)
         if tool:
-            required_fields = tool.get_required_fields()
+            # Use schema-aware required fields if the tool supports it
+            if hasattr(tool, "get_required_fields_for_schema") and current_draft.schema_name:
+                required_fields = tool.get_required_fields_for_schema(current_draft.schema_name)
+            else:
+                required_fields = tool.get_required_fields()
             optional_fields = tool.get_optional_fields()
         else:
             required_fields = []
@@ -144,12 +148,18 @@ class AgentDecisionService:
                 tool_readiness = ToolReadiness.NOT_READY
                 next_state = AgentState.WAITING_FOR_USER
 
+            # Build a human-readable clarification message for the missing fields
+            clarification_msg = None
+            if required_missing:
+                field_name = required_missing[0].replace("_", " ")
+                clarification_msg = f"Could you please provide the {field_name}?"
+
             return DecisionOutput(
                 action=action,
                 tool_readiness=tool_readiness,
                 selected_tool=selected_tool,
-                clarification_message=None,
-                clarification_reason=None,
+                clarification_message=clarification_msg,
+                clarification_reason="Missing required fields" if required_missing else None,
                 required_missing_fields=required_missing,
                 optional_missing_fields=optional_missing,
                 decision_confidence=0.7,
@@ -201,7 +211,10 @@ class AgentDecisionService:
 
             tool = tool_registry.get_tool(pending_tool_name)
             if tool:
-                required_fields = tool.get_required_fields()
+                if hasattr(tool, "get_required_fields_for_schema") and current_draft.schema_name:
+                    required_fields = tool.get_required_fields_for_schema(current_draft.schema_name)
+                else:
+                    required_fields = tool.get_required_fields()
                 optional_fields = tool.get_optional_fields()
             else:
                 required_fields = []
@@ -281,6 +294,9 @@ class AgentDecisionService:
             return output
 
         except Exception as e:
+            from app.exceptions.base import RateLimitException, InvalidAPIKeyException
+            if isinstance(e, (RateLimitException, InvalidAPIKeyException)):
+                raise e
             logger.error(f"[{state.get('request_id')}] AgentDecisionService Error: {e}")
             from app.shared.enums import ToolReadiness, AgentState
             if intent == "conversation" or not intent:

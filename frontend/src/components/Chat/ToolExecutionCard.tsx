@@ -1,4 +1,5 @@
 import React from 'react';
+import { Terminal } from 'lucide-react';
 import { ToolExecutionEvent, TimelineEvent } from '../../types/agent';
 import { Timeline } from '../Common/Timeline';
 import './Chat.css';
@@ -13,16 +14,17 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({ executions
   // Convert ToolExecutionEvents to TimelineEvents
   const timelineEvents: TimelineEvent[] = executions.map((exec, index) => ({
     id: `tool-exec-${index}-${Date.now()}`,
-    timestamp: new Date().toISOString(), // In a real app, this should come from backend
+    timestamp: new Date().toISOString(),
     title: exec.tool_name,
-    description: exec.error || (exec.status === 'success' ? 'Complaint updated successfully' : undefined),
+    description: exec.error || (exec.status === 'success' ? 'Fields updated successfully' : undefined),
     status: exec.status
   }));
 
   return (
     <div className="tool-execution-card">
       <div className="tool-execution-header">
-        <span className="tool-execution-title">AI Action Trace</span>
+        <Terminal size={12} className="tool-execution-icon" />
+        <span className="tool-execution-title">Tool Execution Trace</span>
       </div>
       <Timeline events={timelineEvents} />
     </div>

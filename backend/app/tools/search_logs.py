@@ -50,9 +50,11 @@ class SearchLogsTool(BaseTool):
             f"[{context.request_id}] SearchLogsTool: query='{query}', schema='{schema_name}'"
         )
 
+        user_id = context.current_user.id if context.current_user else None
         records = await log_record_repository.search(
             context.db,
             query=query,
+            user_id=user_id,
             schema_name=schema_name,
             limit=limit,
         )

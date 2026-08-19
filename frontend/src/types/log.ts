@@ -3,6 +3,16 @@ export interface FieldMetadata {
   confidence?: number;
   source?: string;
   last_updated?: string;
+  original_text_snippet?: string;
+}
+
+export type FieldReviewStatus = 'pending' | 'approved' | 'rejected' | 'edited';
+
+export interface FieldReviewState {
+  status: FieldReviewStatus;
+  editedValue?: any;
+  rejectedReason?: string;
+  lastModified?: string;
 }
 
 export interface DynamicLogDraft {
@@ -24,4 +34,16 @@ export enum DraftStatus {
   READY = 'READY',
   CONFIRMED = 'CONFIRMED',
   SAVED = 'SAVED',
+}
+
+export type ViewLayoutMode = 'side-by-side' | 'review-focus' | 'fields-only' | 'chat-focus';
+
+export interface OriginalDocument {
+  id: string;
+  name: string;
+  fileType: 'pdf' | 'docx' | 'txt' | 'eml' | 'pasted';
+  rawText: string;
+  fileUrl?: string | null;
+  uploadedAt: string;
+  fileSize?: number;
 }

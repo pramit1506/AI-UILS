@@ -17,10 +17,13 @@ from app.middleware.request_context import RequestContextMiddleware
 from app.middleware.logging import LoggingMiddleware
 
 
+from app.database.init_db import init_database
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
     logger.info(f"Starting {settings.PROJECT_NAME}...")
+    await init_database()
     yield
     logger.info(f"Shutting down {settings.PROJECT_NAME}...")
 

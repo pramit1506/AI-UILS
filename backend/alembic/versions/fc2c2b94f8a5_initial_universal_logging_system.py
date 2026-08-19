@@ -4,8 +4,7 @@ Revision ID: fc2c2b94f8a5
 Revises: 
 Create Date: 2026-08-01 12:00:00.000000
 
-Drops legacy complaint/customer tables if they exist, then creates the
-universal log_record table with a JSONB data column.
+Creates the universal log_record table with a JSONB data column.
 """
 from alembic import op
 import sqlalchemy as sa

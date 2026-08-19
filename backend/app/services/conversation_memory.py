@@ -76,11 +76,14 @@ class ConversationMemoryService:
             await self.save_metadata(conversation_id, metadata)
             logger.info(f"[{conversation_id}] History compressed successfully.")
         except Exception as e:
+            from app.exceptions.base import RateLimitException, InvalidAPIKeyException
+            if isinstance(e, (RateLimitException, InvalidAPIKeyException)):
+                raise e
             logger.error(f"[{conversation_id}] Error compressing history: {e}")
 
     async def resolve_context(self, conversation_id: str, user_message: str) -> ResolvedContext:
         """
-        Attempts to resolve references (like 'him', 'that complaint') using previous conversation context.
+        Attempts to resolve references (like 'him', 'that log') using previous conversation context.
         Returns a ResolvedContext with confidence score.
         """
         summary = await self.get_summary(conversation_id)
@@ -90,7 +93,7 @@ class ConversationMemoryService:
         # In a fully realized system, we would ask the LLM to resolve references:
         llm = get_llm_provider()
         prompt = (
-            "Given the user's message, resolve any ambiguous references (e.g. 'him', 'it', 'yesterday's complaint') "
+            "Given the user's message, resolve any ambiguous references (e.g. 'him', 'it', 'yesterday's log') "
             "using the current conversation summary and recent messages.\n"
             f"User Message: {user_message}\n"
             f"Summary: {summary.model_dump_json() if summary else 'None'}\n"
@@ -112,6 +115,9 @@ class ConversationMemoryService:
                 
             return resolved
         except Exception as e:
+            from app.exceptions.base import RateLimitException, InvalidAPIKeyException
+            if isinstance(e, (RateLimitException, InvalidAPIKeyException)):
+                raise e
             logger.error(f"[{conversation_id}] Context resolution error: {e}")
             return ResolvedContext(confidence=0.0, requires_clarification=True)
 

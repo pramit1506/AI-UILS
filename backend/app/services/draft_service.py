@@ -4,6 +4,25 @@ from app.schemas.draft import DynamicLogDraft, DraftUpdateResult, FieldMetadata
 from app.shared.enums import DraftStatus
 
 
+FIELD_ALIASES: Dict[str, List[str]] = {
+    "vendor": ["vendor_name", "company", "vendor", "billed_by", "supplier", "issuer"],
+    "vendor_name": ["vendor", "company", "vendor_name", "billed_by", "supplier", "issuer"],
+    "total_amount": ["total", "total_amount_due", "total_due", "amount_due", "total_price", "amount", "grand_total"],
+    "total": ["total_amount", "total_amount_due", "total_due", "amount_due", "total_price", "amount", "grand_total"],
+    "invoice_number": ["invoice_no", "inv_number", "inv_no", "invoice_#", "reference_number", "bill_number"],
+    "invoice_date": ["date", "issue_date", "billed_date", "bill_date"],
+    "customer_name": ["customer", "client", "billed_to", "client_name", "customer_id"],
+    "customer": ["customer_name", "client", "billed_to", "client_name"],
+    "patient_name": ["patient", "name", "full_name", "patient_id"],
+    "doctor_name": ["doctor", "physician", "provider", "dr_name"],
+    "candidate_name": ["name", "full_name", "applicant_name"],
+    "product_name": ["product", "item", "item_name", "device_name"],
+    "batch_number": ["batch_no", "lot_number", "lot_no", "batch"],
+    "effective_date": ["start_date", "agreement_date", "date"],
+    "parties": ["party_a", "party_b", "contractor", "client", "parties_involved"],
+}
+
+
 class DraftService:
     """
     Service for managing a DynamicLogDraft lifecycle.
@@ -26,17 +45,26 @@ class DraftService:
         
         def _get_val(f: str) -> Any:
             if hasattr(draft, f) and f in ("schema_name", "domain", "source", "fields"):
-                return getattr(draft, f)
-            return fields.get(f)
+                val = getattr(draft, f)
+                if not self._is_empty_value(val):
+                    return val
+            if not self._is_empty_value(fields.get(f)):
+                return fields.get(f)
+            aliases = FIELD_ALIASES.get(f, [])
+            for alias in aliases:
+                if not self._is_empty_value(fields.get(alias)):
+                    return fields.get(alias)
+            return None
             
         return [f for f in check if self._is_empty_value(_get_val(f))]
 
     def has_any_data(self, draft: DynamicLogDraft) -> bool:
-        return bool(draft.schema_name or any(not self._is_empty_value(v) for v in draft.fields.values()))
+        fields = draft.fields or {}
+        return any(not self._is_empty_value(v) for k, v in fields.items() if not k.startswith("_"))
 
     def is_ready(self, draft: DynamicLogDraft, required: List[str] = None) -> bool:
-        """A draft is ready if schema_name is set and all required fields are filled."""
-        if not draft.schema_name:
+        """A draft is ready if schema_name is set, has actual data fields, and all required fields are filled."""
+        if not draft.schema_name or not self.has_any_data(draft):
             return False
         return len(self.required_missing_fields(draft, required or [])) == 0
 
@@ -53,7 +81,7 @@ class DraftService:
         req_missing = self.required_missing_fields(draft, required)
         status = self.calculate_status(draft, required)
         return {
-            "is_ready": len(req_missing) == 0 and bool(draft.schema_name),
+            "is_ready": len(req_missing) == 0 and bool(draft.schema_name) and self.has_any_data(draft),
             "status": status,
             "required_missing": req_missing,
             "optional_missing": [],
@@ -65,13 +93,21 @@ class DraftService:
         
         def _get_val(f: str) -> Any:
             if hasattr(draft, f) and f in ("schema_name", "domain", "source", "fields"):
-                return getattr(draft, f)
-            return fields.get(f)
+                val = getattr(draft, f)
+                if not self._is_empty_value(val):
+                    return val
+            if not self._is_empty_value(fields.get(f)):
+                return fields.get(f)
+            aliases = FIELD_ALIASES.get(f, [])
+            for alias in aliases:
+                if not self._is_empty_value(fields.get(alias)):
+                    return fields.get(alias)
+            return None
 
         req_missing = [f for f in required_fields if self._is_empty_value(_get_val(f))]
         opt_missing = [f for f in optional_fields if self._is_empty_value(_get_val(f))]
 
-        has_data = bool(draft.schema_name) or any(not self._is_empty_value(v) for v in fields.values())
+        has_data = self.has_any_data(draft)
         if not has_data:
             status = DraftStatus.EMPTY
         elif len(req_missing) == 0:
@@ -80,7 +116,7 @@ class DraftService:
             status = DraftStatus.PARTIAL
 
         return {
-            "is_ready": len(req_missing) == 0,
+            "is_ready": len(req_missing) == 0 and has_data,
             "status": status,
             "required_missing": req_missing,
             "optional_missing": opt_missing,

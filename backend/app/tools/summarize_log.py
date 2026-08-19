@@ -51,7 +51,10 @@ class SummarizeLogTool(BaseTool):
         )
         try:
             response = await llm.generate_response([{"role": "user", "content": prompt}])
-        except Exception:
+        except Exception as e:
+            from app.exceptions.base import RateLimitException, InvalidAPIKeyException
+            if isinstance(e, (RateLimitException, InvalidAPIKeyException)):
+                raise e
             # Fallback: build a mechanical summary from the first few non-empty fields
             top_fields = [(k, v) for k, v in fields.items() if v][:4]
             response = f"{schema_name}: " + "; ".join(f"{k}={v}" for k, v in top_fields)

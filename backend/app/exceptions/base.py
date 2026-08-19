@@ -56,3 +56,16 @@ class InvalidAPIKeyException(ProviderException):
 class ModelUnavailableException(ProviderException):
     def __init__(self, message: str = "Model unavailable"):
         super().__init__(message, status_code=503)
+
+
+class AllProvidersExhaustedException(ProviderException):
+    """
+    Raised when every configured LLM provider key (across all providers in the
+    failover pool) has been exhausted by rate-limits or auth failures.
+
+    This is distinct from a transient RateLimitException on a single provider —
+    it signals that no further automatic recovery is possible and the system
+    needs human attention (e.g., provide new API keys or wait for quota reset).
+    """
+    def __init__(self, message: str = "All LLM providers exhausted. Every configured API key has hit its rate limit or is invalid."):
+        super().__init__(message, status_code=503)

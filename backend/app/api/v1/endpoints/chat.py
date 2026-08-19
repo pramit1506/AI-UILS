@@ -1,4 +1,5 @@
 import uuid
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from langgraph.graph.state import CompiledStateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,13 +13,17 @@ from app.llm.factory import get_llm_provider
 from app.schemas.chat import ChatRequest, ConversationResponse
 from app.utils.response_mapper import ConversationResponseMapper
 
+from app.dependencies.auth import get_optional_current_user
+from app.models.user import User
+
 router = APIRouter()
 
 @router.post("/", response_model=APIResponse[ConversationResponse])
 async def chat_endpoint(
     request: ChatRequest,
     graph: CompiledStateGraph = Depends(get_graph),
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
+    current_user: Optional[User] = Depends(get_optional_current_user),
 ) -> APIResponse[ConversationResponse]:
     request_id = str(uuid.uuid4())
     conversation_id = request.conversation_id or str(uuid.uuid4())
@@ -37,6 +42,8 @@ async def chat_endpoint(
         # so they are preserved by the MemorySaver checkpointer.
         "model_name": settings.DEFAULT_MODEL
     }
+    if request.log_draft:
+        input_state["log_draft"] = request.log_draft
     
     tool_context = ToolExecutionContext(
         db=db,
@@ -44,7 +51,7 @@ async def chat_endpoint(
         conversation_id=conversation_id,
         logger=logger,
         settings=settings,
-        current_user=None,
+        current_user=current_user,
         llm_provider=get_llm_provider()
     )
     
