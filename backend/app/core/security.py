@@ -4,12 +4,25 @@ from typing import Any, Optional, Union
 import jwt
 import bcrypt
 import hashlib
+import hmac
 import os
+import secrets
+
+from fastapi import Response
 
 from app.core.config import settings
 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days expiration
+# Access token lifetime. 7 days was far too long for a token that cannot be
+# revoked; 24 hours is a sane default for this app's session model.
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
+
+# ── Cookie transport constants (browser clients send the JWT as an
+#    httpOnly cookie; API clients keep using the Authorization header) ──
+AUTH_COOKIE_NAME = "uils_access"
+CSRF_COOKIE_NAME = "uils_csrf"
+CSRF_HEADER_NAME = "x-csrf-token"
+COOKIE_MAX_AGE_SECONDS = ACCESS_TOKEN_EXPIRE_MINUTES * 60  # 86400
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -29,7 +42,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
                 computed_hash = hashlib.pbkdf2_hmac(
                     "sha256", plain_password.encode("utf-8"), salt, 100000
                 ).hex()
-                return computed_hash == expected_hash
+                return hmac.compare_digest(computed_hash, expected_hash)
 
         # Standard bcrypt check
         return bcrypt.checkpw(
@@ -89,5 +102,64 @@ def decode_access_token(token: str) -> Optional[dict]:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
         return payload
-    except (jwt.PyJWTError, Exception):
+    except jwt.InvalidTokenError:
+        # Expired, malformed, bad signature, etc. Only catch PyJWT's own error
+        # hierarchy — a bare `except Exception` hid cryptography/programming bugs.
         return None
+
+
+def _fresh_csrf_token() -> str:
+    """Unique per-login CSRF token for the double-submit pattern."""
+    return secrets.token_urlsafe(32)
+
+
+def set_auth_cookies(
+    response: Response,
+    token: str,
+    csrf_token: Optional[str] = None,
+    secure: Optional[bool] = None,
+) -> str:
+    """
+    Attach the httpOnly access-token cookie and the readable CSRF cookie.
+
+    Used on successful login / register / password change. The token is ALSO
+    still returned in the JSON body for backward compatibility with API
+    clients that use the Authorization header.
+    Returns the CSRF token value (useful when it was auto-generated).
+    """
+    if csrf_token is None:
+        csrf_token = _fresh_csrf_token()
+    # Reflect the issued token's real lifetime; tests may pass secure=False
+    # explicitly, otherwise honor the deployment mode (HTTPS in production).
+    if secure is None:
+        secure = settings.AUTH_COOKIE_SECURE
+    if secure is None:
+        secure = not settings.DEBUG
+
+    # Access token: httpOnly so JavaScript can never exfiltrate it.
+    response.set_cookie(
+        AUTH_COOKIE_NAME,
+        token,
+        max_age=COOKIE_MAX_AGE_SECONDS,
+        httponly=True,
+        samesite="lax",
+        path="/",
+        secure=secure,
+    )
+    # CSRF token: readable by JS so the SPA can echo it back in x-csrf-token.
+    response.set_cookie(
+        CSRF_COOKIE_NAME,
+        csrf_token,
+        max_age=COOKIE_MAX_AGE_SECONDS,
+        httponly=False,
+        samesite="lax",
+        path="/",
+        secure=secure,
+    )
+    return csrf_token
+
+
+def clear_auth_cookies(response: Response) -> None:
+    """Delete both auth cookies (called by the logout endpoint)."""
+    response.delete_cookie(AUTH_COOKIE_NAME, path="/", samesite="lax")
+    response.delete_cookie(CSRF_COOKIE_NAME, path="/", samesite="lax")

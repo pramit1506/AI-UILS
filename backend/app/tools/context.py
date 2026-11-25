@@ -17,4 +17,8 @@ class ToolExecutionContext(BaseModel):
     logger: Any = logger
     settings: Any = settings
     current_user: Optional[Any] = None
+    source_text: Optional[str] = None
+    source_filename: Optional[str] = None
+    source_is_current_message: bool = False
+    excluded_fields: frozenset[str] = frozenset()
     llm_provider: Optional[Any] = None

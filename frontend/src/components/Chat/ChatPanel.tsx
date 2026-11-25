@@ -1,12 +1,16 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Sparkles, Save, Upload, Loader2 } from 'lucide-react';
+import { useStore } from 'react-redux';
+import { Sparkles, Upload, Loader2 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import { sendMessage, addUserMessage } from '../../redux/chatSlice';
 import { setExtractionStatus } from '../../redux/logSlice';
-import { setDocument, updateDocumentText } from '../../redux/documentSlice';
+import { setDocument, updateDocumentText, setFileObjectUrl } from '../../redux/documentSlice';
+import type { RootState } from '../../redux/store';
 import { uploadService } from '../../services/uploadService';
+import { openAuthModal } from '../../redux/authSlice';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
+import { DocumentViewer } from '../DocumentViewer/DocumentViewer';
 import { EmptyState } from './EmptyState';
 import { TypingIndicator } from './TypingIndicator';
 import { ErrorBanner } from '../Common/ErrorBanner';
@@ -14,11 +18,23 @@ import './Chat.css';
 
 export const ChatPanel: React.FC = () => {
   const dispatch = useAppDispatch();
+  const store = useStore<RootState>();
   const { messages, loading, error } = useAppSelector((state) => state.chat);
   const { extractionStatus, currentLog } = useAppSelector((state) => state.log);
   const currentDocument = useAppSelector((state) => state.document.currentDocument);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [uploadError, setUploadError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
+  const [showSamples, setShowSamples] = useState(false);
+  const sampleTrigger = useRef<HTMLButtonElement>(null);
+  const samplePanel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (showSamples) samplePanel.current?.focus();
+  }, [showSamples]);
+  const closeSamples = () => {
+    setShowSamples(false);
+    requestAnimationFrame(() => sampleTrigger.current?.focus());
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -31,30 +47,34 @@ export const ChatPanel: React.FC = () => {
   const handleSend = useCallback(
     (text: string) => {
       // If user pasted a sizable paragraph/document text and no document is active yet, store in documentSlice
-      if (!currentDocument && text.length > 80 && !text.toLowerCase().startsWith('save')) {
+      const capture = !currentDocument && !currentLog && (text.length > 80 || /^[\p{L}][\p{L}\p{N} _-]{1,35}:\s*\S/u.test(text)) &&
+        !/^(?:save|search|find|retrieve|look up|recall|summarize)\b/i.test(text);
+      if (capture) {
         dispatch(updateDocumentText(text));
       }
       dispatch(addUserMessage(text));
-      dispatch(sendMessage(text));
+      dispatch(sendMessage(capture ? { message: text, action: 'capture' } : text));
     },
-    [dispatch, currentDocument]
+    [dispatch, currentDocument, currentLog]
   );
-
-  const handleSaveLog = useCallback(() => {
-    dispatch(addUserMessage('Save the log'));
-    dispatch(sendMessage('Save the log'));
-  }, [dispatch]);
 
   const handleFileUpload = useCallback(
     async (file: File) => {
+      const workspaceRevision = store.getState().chat.workspaceRevision;
+      if (!store.getState().auth?.isAuthenticated) {
+        dispatch(openAuthModal('login'));
+        return;
+      }
+      setUploadError('');
       dispatch(setExtractionStatus('extracting'));
       try {
         const response = await uploadService.extractText(file);
+        if (store.getState().chat.workspaceRevision !== workspaceRevision) return;
         if (response.success && response.data) {
           const extension = file.name.split('.').pop()?.toLowerCase() || 'txt';
           const fileType = (['pdf', 'docx', 'txt', 'eml'].includes(extension)
             ? extension
-            : 'txt') as any;
+            : 'txt') as 'pdf' | 'txt' | 'eml' | 'docx';
           const fileUrl =
             fileType === 'pdf' && typeof URL !== 'undefined' && URL.createObjectURL
               ? URL.createObjectURL(file)
@@ -72,28 +92,26 @@ export const ChatPanel: React.FC = () => {
               fileSize: file.size,
             })
           );
+          // setDocument resets the URL slot; record the new blob URL afterwards.
+          dispatch(setFileObjectUrl(fileUrl));
 
           const textToProcess = `Process this uploaded document (${response.data.filename}):\n\n${response.data.text}`;
           dispatch(addUserMessage(textToProcess));
-          dispatch(sendMessage(textToProcess));
+          dispatch(sendMessage({ message: textToProcess, action: 'capture' }));
           dispatch(setExtractionStatus('completed'));
         } else {
           throw new Error('Empty response from extraction service.');
         }
-      } catch (err: any) {
+      } catch (err) {
+        if (store.getState().chat.workspaceRevision !== workspaceRevision) return;
         console.error('File upload failed:', err);
         dispatch(setExtractionStatus('error'));
         const errorMsg =
-          err?.message || 'Could not read the uploaded file. Please try again.';
-        dispatch(addUserMessage(`[Upload failed: ${file.name}]`));
-        dispatch(
-          sendMessage(
-            `The user tried to upload a file but it failed with error: ${errorMsg}. Please let the user know politely.`
-          )
-        );
+          err instanceof Error ? err.message : 'Could not read the uploaded file. Please try again.';
+        setUploadError(errorMsg);
       }
     },
-    [dispatch]
+    [dispatch, store]
   );
 
   const onDragOver = useCallback((e: React.DragEvent) => {
@@ -110,12 +128,12 @@ export const ChatPanel: React.FC = () => {
     (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
-      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      if (!loading && extractionStatus !== 'extracting' && e.dataTransfer.files.length > 0) {
         handleFileUpload(e.dataTransfer.files[0]);
         e.dataTransfer.clearData();
       }
     },
-    [handleFileUpload]
+    [handleFileUpload, loading, extractionStatus]
   );
 
   const isExtracting = extractionStatus === 'extracting';
@@ -132,12 +150,12 @@ export const ChatPanel: React.FC = () => {
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      <div className="chat-header">
+      {(messages.length > 0 || isExtracting) && <div className="chat-header">
         <div className="chat-header-left">
           <div className="chat-header-icon-wrap">
             <Sparkles size={14} />
           </div>
-          <h2>AI Copilot</h2>
+          <h2>Conversation</h2>
         </div>
 
         <div className="chat-header-right">
@@ -147,28 +165,28 @@ export const ChatPanel: React.FC = () => {
               <span>Extracting…</span>
             </div>
           )}
-
-          {hasDraft && (
-            <button
-              className="chat-header-save-btn"
-              onClick={handleSaveLog}
-              disabled={loading || isExtracting}
-              title="Save and commit this log to database (Ctrl + Enter)"
-            >
-              <Save size={12} />
-              <span>Save Log</span>
-            </button>
-          )}
         </div>
-      </div>
+      </div>}
 
+      {uploadError && <div role="alert"><ErrorBanner message={uploadError} /></div>}
       <div className="chat-messages-container">
         {messages.length === 0 ? (
-          <EmptyState onFileUpload={handleFileUpload} onPasteText={handleSend} />
+          <div className={'intake-grid' + (showSamples ? ' with-samples' : '')}><div className="intake-main"><EmptyState busy={loading || isExtracting} onSignIn={() => dispatch(openAuthModal('login'))} onFileUpload={handleFileUpload} onPasteText={(text) => {
+            dispatch(updateDocumentText(text));
+            dispatch(addUserMessage(text));
+            dispatch(sendMessage({ message: text, action: 'capture' }));
+          }} />
+          {!currentDocument && !loading && !isExtracting && <button type="button" className="sample-trigger"
+            ref={sampleTrigger} aria-expanded={showSamples} aria-controls="sample-library" onClick={() => setShowSamples(!showSamples)}>
+            {showSamples ? 'Hide samples' : 'Try a sample document'}</button>}</div>
+          {showSamples && <aside id="sample-library" ref={samplePanel} tabIndex={-1} aria-label="Sample documents"
+            onKeyDown={e => { if (e.key === 'Escape') closeSamples(); }}>
+            <button type="button" className="sample-close" onClick={closeSamples} aria-label="Close sample documents">×</button>
+            <DocumentViewer /></aside>}</div>
         ) : (
           <div className="chat-messages-list">
             {messages.map((msg) => (
-              <ChatMessage key={msg.id} message={msg} onSaveLog={handleSaveLog} />
+              <ChatMessage key={msg.id} message={msg} />
             ))}
             {loading && (
               <div className="chat-loading-indicator">
@@ -185,7 +203,6 @@ export const ChatPanel: React.FC = () => {
         <ChatInput
           onSend={handleSend}
           onFileUpload={handleFileUpload}
-          onSave={handleSaveLog}
           hasDraft={hasDraft}
           disabled={loading || isExtracting}
         />

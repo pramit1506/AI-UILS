@@ -39,16 +39,26 @@ def _make_response(content: str = "OK") -> MagicMock:
 @pytest.fixture(autouse=True)
 def patch_settings(monkeypatch):
     """Patch settings so we don't need a real .env during testing."""
-    monkeypatch.setenv("GROQ_API_KEY_1", "gsk_test_key_1")
-    monkeypatch.setenv("GROQ_API_KEY_2", "gsk_test_key_2")
-    monkeypatch.setenv("CEREBRAS_API_KEY_1", "csk_test_key_1")
-    monkeypatch.setenv("GEMINI_API_KEY_1", "AIza_test_key_1")
-    monkeypatch.setenv("OPENROUTER_API_KEY_1", "sk-or-test_key_1")
-    monkeypatch.setenv("LLM_PROVIDER", "multi")
-    monkeypatch.setenv("CONTEXT_COMPRESSION_THRESHOLD", "3")  # low threshold for testing
-    # Reload settings so our monkeypatched env vars take effect
-    from app.core import config as cfg
-    cfg.settings.__init__()
+    from app.llm.providers import resiliency_provider as module
+    from app.core.config import Settings
+
+    for prefix in ("GEMINI", "GROQ", "OPENROUTER"):
+        for suffix in ("", *(f"_{i}" for i in range(1, 11))):
+            monkeypatch.delenv(f"{prefix}_API_KEY{suffix}", raising=False)
+    config = Settings(
+        _env_file=None,
+        GEMINI_FREE_TIER_CONFIRMED=True,
+        GROQ_FREE_TIER_CONFIRMED=True,
+        GROQ_API_KEY="gsk_test_key_1",
+        GROQ_API_KEY_1="gsk_test_key_1",
+        GROQ_API_KEY_2="gsk_test_key_2",
+        GEMINI_API_KEY_1="AIza_test_key_1",
+        GEMINI_API_KEY_2="AIza_test_key_2",
+        OPENROUTER_API_KEY_1="sk-or-test_key_1",
+        CONTEXT_COMPRESSION_THRESHOLD=3,
+    )
+    monkeypatch.setattr(module, "settings", config)
+    return config
 
 
 # ---------------------------------------------------------------------------
@@ -78,28 +88,39 @@ class TestKeyPoolConstruction:
         assert len(agent_core) >= 1
         assert len(fast_router) >= 1
 
-    def test_raises_when_no_keys_configured(self, monkeypatch):
-        """ResiliencyProvider init must fail fast if zero keys are configured."""
-        import os
-        from app.core.config import settings
+    @pytest.mark.parametrize("role", ["agent-core", "fast-router"])
+    def test_priority_and_distinct_keys(self, role):
+        from app.llm.providers.resiliency_provider import _build_model_list
+        slots = [m["litellm_params"] for m in _build_model_list() if m["model_name"] == role]
+        expected = [("gemini", 0)] * 2
+        if role == "agent-core":
+            expected += [("gemini", 1)] * 2
+        expected += [("groq", 2), ("groq", 2), ("openrouter", 3), ("openrouter", 4)]
+        assert [(p["model"].split("/")[0], p["order"]) for p in slots] == expected
+        assert len({(p["model"], p["api_key"]) for p in slots}) == len(slots)
+        assert slots[-1]["model"].endswith(":free")
+        assert slots[-1]["extra_body"]["provider"]["max_price"] == {"request": 0, "prompt": 0, "completion": 0}
+
+    def test_unconfirmed_plans_use_only_free_openrouter(self, patch_settings):
+        from app.llm.providers.resiliency_provider import _build_model_list
+        patch_settings.GEMINI_FREE_TIER_CONFIRMED = False
+        patch_settings.GROQ_FREE_TIER_CONFIRMED = False
+        assert all(d["litellm_params"]["model"].endswith(":free") for d in _build_model_list())
+
+    def test_paid_openrouter_model_rejected(self, patch_settings):
+        from app.llm.providers.resiliency_provider import _build_model_list
+        patch_settings.OPENROUTER_MODEL = "google/gemma-4-31b-it"
+        with pytest.raises(ValueError, match=":free"):
+            _build_model_list()
+
+    def test_raises_when_no_eligible_keys(self, patch_settings):
+        from app.llm.providers.resiliency_provider import ResiliencyProvider
         from app.exceptions.base import AllProvidersExhaustedException
-
-        # Blank out all keys on both the settings singleton and os.environ
-        all_prefixes = ["GROQ_API_KEY", "CEREBRAS_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY"]
-        monkeypatch.setattr(settings, "GROQ_API_KEY", "", raising=False)
-        monkeypatch.setenv("GROQ_API_KEY", "")
-        for prefix in all_prefixes:
-            for i in range(1, 11):
-                monkeypatch.setattr(settings, f"{prefix}_{i}", "", raising=False)
-                monkeypatch.setenv(f"{prefix}_{i}", "")
-
-        from app.llm.providers.resiliency_provider import _build_model_list, ResiliencyProvider
-        assert _build_model_list() == [], "Expected empty model list with all keys blanked"
-
-        with pytest.raises((AllProvidersExhaustedException, Exception)):
+        patch_settings.GEMINI_FREE_TIER_CONFIRMED = False
+        patch_settings.GROQ_FREE_TIER_CONFIRMED = False
+        patch_settings.OPENROUTER_API_KEY_1 = ""
+        with pytest.raises(AllProvidersExhaustedException):
             ResiliencyProvider()
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -144,6 +165,29 @@ class TestGenerateResponse:
 
 @pytest.mark.asyncio
 class TestFailover:
+    @pytest.mark.parametrize("role", ["agent-core", "fast-router"])
+    async def test_router_uses_priority_for_each_role(self, role, patch_settings, monkeypatch):
+        import litellm
+        from app.llm.providers.resiliency_provider import ResiliencyProvider
+
+        patch_settings.ROUTER_NUM_RETRIES = 0
+        attempted = []
+
+        async def complete(**kwargs):
+            provider = kwargs["model"].split("/")[0]
+            attempted.append(provider)
+            if provider != "openrouter":
+                raise litellm.ServiceUnavailableError("simulated outage", provider, kwargs["model"])
+            assert kwargs["extra_body"]["provider"]["max_price"]["request"] == 0
+            return litellm.ModelResponse(choices=[{"message": {"role": "assistant", "content": "OK"}}])
+
+        monkeypatch.setattr(litellm, "acompletion", complete)
+        router = ResiliencyProvider()
+        result = await router.generate_response([{"role": "user", "content": "ping"}], model=role)
+        assert result == "OK"
+        gemini_attempts = 2 if role == "agent-core" else 1
+        assert attempted == ["gemini"] * gemini_attempts + ["groq", "openrouter"]
+
     async def test_raises_all_providers_exhausted_on_pool_failure(self):
         from app.llm.providers.resiliency_provider import ResiliencyProvider, _translate_litellm_exc
         from app.exceptions.base import AllProvidersExhaustedException

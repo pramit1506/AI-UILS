@@ -1,8 +1,9 @@
-/* ═══════════════════════════════════════════════════════════════
+﻿/* ═══════════════════════════════════════════════════════════════
    DOCUMENT VIEWER — Modern Code/Text Source Inspection & Highlights
    ═══════════════════════════════════════════════════════════════ */
 
 .doc-viewer-container {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -23,11 +24,15 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
+  /* never wider than the panel, never narrower than its paddings allow */
+  width: 100%;
   max-width: 380px;
+  min-width: 0;
   background: var(--color-surface);
   border: 1px dashed var(--color-glass-border-lg);
   border-radius: var(--radius-xl);
   padding: var(--spacing-8) var(--spacing-6);
+  box-sizing: border-box;
 }
 
 .doc-empty-icon-wrap {
@@ -37,8 +42,8 @@
   width: 56px;
   height: 56px;
   border-radius: var(--radius-lg);
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
   color: var(--accent-light);
   margin-bottom: var(--spacing-4);
 }
@@ -46,7 +51,7 @@
 .doc-viewer-empty-card h3 {
   font-size: 0.95rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-text-primary);
   letter-spacing: -0.01em;
   margin-bottom: var(--spacing-2);
 }
@@ -76,7 +81,10 @@
 
 .doc-sample-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  /* minmax(0, 1fr) — plain `1fr` tracks size to minmax(auto, 1fr), so the
+     nowrap sample names force their track's min-content wider than the card
+     and the grid visually overflows the card border. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.5rem;
   width: 100%;
 }
@@ -85,6 +93,8 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
+  min-width: 0;
+  overflow: hidden;
   background: var(--color-surface-2);
   border: 1px solid var(--color-glass-border-lg);
   color: var(--color-text-primary);
@@ -99,14 +109,14 @@
 
 .doc-sample-btn:hover {
   background: var(--color-surface-3);
-  border-color: rgba(99, 102, 241, 0.5);
-  color: #fff;
+  border-color: var(--accent);
+  color: var(--accent);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+  box-shadow: 0 4px 12px var(--accent-glow);
 }
 
 .doc-sample-sparkle {
-  color: #818cf8;
+  color: var(--accent);
   flex-shrink: 0;
 }
 
@@ -130,7 +140,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #a5b4fc;
+  color: var(--accent);
 }
 
 /* ── Document Top Header ────────────────────────────────────── */
@@ -160,15 +170,15 @@
   width: 30px;
   height: 30px;
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-glass-hover);
   border: 1px solid var(--color-glass-border);
   color: var(--accent-light);
   flex-shrink: 0;
 }
 
-.doc-icon-pdf { color: #f43f5e; }
-.doc-icon-docx { color: #0ea5e9; }
-.doc-icon-txt { color: #10b981; }
+.doc-icon-pdf { color: var(--color-error); }
+.doc-icon-docx { color: var(--color-info); }
+.doc-icon-txt { color: var(--color-success); }
 
 .doc-info-block {
   display: flex;
@@ -179,7 +189,7 @@
 .doc-title {
   font-size: 0.82rem;
   font-weight: 600;
-  color: #fff;
+  color: var(--color-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -198,8 +208,8 @@
   font-weight: 700;
   text-transform: uppercase;
   color: var(--accent-light);
-  background: rgba(99, 102, 241, 0.15);
-  border: 1px solid rgba(99, 102, 241, 0.25);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
   padding: 0.05rem 0.35rem;
   border-radius: 3px;
 }
@@ -220,7 +230,7 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-1);
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--color-input-sunken);
   border: 1px solid var(--color-glass-border);
   border-radius: var(--radius-sm);
   padding: 0.2rem 0.5rem;
@@ -239,7 +249,7 @@
 .doc-search-input {
   background: transparent;
   border: none;
-  color: #fff;
+  color: var(--color-text-primary);
   font-size: 0.75rem;
   width: 110px;
   outline: none;
@@ -247,6 +257,29 @@
 
 .doc-search-input::placeholder {
   color: var(--color-text-muted);
+}
+
+@container (max-width: 450px) {
+  .doc-viewer-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .doc-header-actions, .doc-search-bar, .doc-search-input {
+    min-width: 0;
+  }
+
+  .doc-search-bar {
+    flex: 1;
+  }
+
+  .doc-search-input {
+    width: 100%;
+  }
+
+  .doc-mode-toggle {
+    flex-shrink: 0;
+  }
 }
 
 .doc-search-clear {
@@ -260,35 +293,14 @@
 }
 
 .doc-search-clear:hover {
-  color: #fff;
-}
-
-.doc-save-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1);
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  color: var(--color-success-text);
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 0.25rem 0.6rem;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
-}
-
-.doc-save-btn:hover {
-  background: rgba(16, 185, 129, 0.25);
-  border-color: rgba(16, 185, 129, 0.5);
-  transform: translateY(-1px);
+  color: var(--color-text-primary);
 }
 
 .doc-mode-toggle {
   display: flex;
   align-items: center;
   gap: 2px;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--color-surface-3);
   border: 1px solid var(--color-glass-border);
   border-radius: var(--radius-sm);
   padding: 2px;
@@ -311,7 +323,7 @@
 
 .doc-mode-btn.active {
   background: var(--color-surface-3);
-  color: #fff;
+  color: var(--accent);
   font-weight: 600;
 }
 
@@ -321,8 +333,8 @@
   align-items: center;
   gap: var(--spacing-2);
   padding: 0.35rem var(--spacing-4);
-  background: linear-gradient(90deg, rgba(99, 102, 241, 0.15), rgba(99, 102, 241, 0.05));
-  border-bottom: 1px solid rgba(99, 102, 241, 0.2);
+  background: var(--accent-gradient-subtle);
+  border-bottom: 1px solid var(--accent-border);
   font-size: 0.72rem;
   color: var(--color-text-secondary);
   flex-shrink: 0;
@@ -338,7 +350,7 @@
 }
 
 .doc-banner-label strong {
-  color: #fff;
+  color: var(--color-text-primary);
   text-transform: capitalize;
 }
 
@@ -363,7 +375,7 @@
 }
 
 .doc-banner-clear:hover {
-  color: #fff;
+  color: var(--color-text-primary);
 }
 
 /* BUG-003 fix: no-match info banner (amber/warning tone) */
@@ -372,29 +384,32 @@
   align-items: center;
   gap: var(--spacing-2);
   padding: 0.28rem var(--spacing-4);
-  background: linear-gradient(90deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.04));
-  border-bottom: 1px solid rgba(245, 158, 11, 0.2);
+  background: var(--color-warning-bg);
+  border-bottom: 1px solid var(--color-warning-border);
   font-size: 0.7rem;
-  color: #b8930a;
+  color: var(--color-warning-text);
   flex-shrink: 0;
 }
 
 .doc-no-match-banner strong {
-  color: #d4a017;
+  color: var(--color-warning-text);
   font-family: 'JetBrains Mono', monospace;
 }
 
 .doc-no-match-icon {
-  color: #d4a017;
+  color: var(--color-warning-text);
   flex-shrink: 0;
 }
 
 
 /* ── Content View & Text Grid ───────────────────────────────── */
+/* THEME NOTE: uses the themed surface pair — NOT --color-sunken — so the
+   document canvas follows light/dark like the rest of the app. */
 .doc-viewer-content {
   flex: 1;
   overflow-y: auto;
-  background: #0c0d10;
+  background: var(--color-surface-2);
+  border-top: 1px solid var(--color-glass-border);
 }
 
 .doc-text-grid {
@@ -412,7 +427,7 @@
 }
 
 .doc-line:hover {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface-hover);
 }
 
 .doc-line-num {
@@ -427,7 +442,7 @@
 
 .doc-line-text {
   flex: 1;
-  color: #d1d5db;
+  color: var(--color-text-secondary);
   white-space: pre-wrap;
   word-break: break-word;
   padding-right: var(--spacing-4);
@@ -435,17 +450,16 @@
 
 /* Highlight styles */
 .doc-highlight-active {
-  background: rgba(99, 102, 241, 0.35);
-  color: #fff;
+  background: var(--accent-subtle);
+  color: var(--color-text-primary);
   border-bottom: 2px solid var(--accent);
   padding: 0 3px;
   border-radius: 2px;
-  box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
 }
 
 .doc-highlight-search {
-  background: rgba(245, 158, 11, 0.3);
-  color: #fff;
+  background: var(--color-warning-bg);
+  color: var(--color-text-primary);
   border-bottom: 2px solid var(--color-warning);
   padding: 0 3px;
   border-radius: 2px;
@@ -464,11 +478,11 @@
   display: flex;
   align-items: center;
   gap: 3px;
-  background: #18191e;
+  background: var(--color-surface-2);
   border: 1px solid var(--color-glass-border-lg);
   border-radius: var(--radius-md);
   padding: 4px 6px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--color-glass-border);
   z-index: 100;
   animation: popover-slide-in 120ms ease-out;
 }
@@ -508,7 +522,7 @@
 }
 
 .doc-popover-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-3);
 }
 
 .doc-popover-btn:disabled {
@@ -521,15 +535,15 @@
 }
 
 .doc-popover-btn.assign:hover:not(:disabled) {
-  background: rgba(99, 102, 241, 0.15);
+  background: var(--accent-subtle);
 }
 
 .doc-popover-btn.ai {
-  color: #38bdf8;
+  color: var(--color-info-text);
 }
 
 .doc-popover-btn.ai:hover {
-  background: rgba(14, 165, 233, 0.15);
+  background: var(--color-info-bg);
 }
 
 .doc-popover-btn.save {
@@ -537,5 +551,14 @@
 }
 
 .doc-popover-btn.save:hover {
-  background: rgba(16, 185, 129, 0.15);
+  background: var(--color-success-bg);
+}
+
+/* Saved guard state — neutralized per useSaveLog (no repeats of the record) */
+.doc-popover-btn.save.saved {
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
+  color: var(--color-success-text);
+  cursor: default;
+  opacity: 0.85;
 }

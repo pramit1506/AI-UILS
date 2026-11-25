@@ -6,7 +6,6 @@ import {
   RegisterCredentials,
   ProfileUpdatePayload,
   PasswordResetCredentials,
-  AccountDeletePayload,
 } from '../types/auth';
 import { authService } from '../services/authService';
 
@@ -24,17 +23,6 @@ interface AuthState {
   authModalTab: AuthModalTab;
 }
 
-function getStoredToken(): string | null {
-  try {
-    if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
-      return window.localStorage.getItem('auth_token');
-    }
-  } catch {
-    // Ignore storage access issues
-  }
-  return null;
-}
-
 function getStoredUser(): UserProfile | null {
   try {
     if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
@@ -47,18 +35,17 @@ function getStoredUser(): UserProfile | null {
   return null;
 }
 
-function setStoredToken(token: string | null) {
-  try {
-    if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
-      if (token) {
-        window.localStorage.setItem('auth_token', token);
-      } else {
-        window.localStorage.removeItem('auth_token');
-      }
-    }
-  } catch {
-    // Ignore storage write issues
+/**
+ * One-time cleanup: older builds persisted the raw JWT in localStorage
+ * ('auth_token'). The token now lives in an httpOnly cookie the browser
+ * manages; drop any leftover key so an expired token never lingers.
+ */
+try {
+  if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+    window.localStorage.removeItem('auth_token');
   }
+} catch {
+  // Ignore storage access issues
 }
 
 function setStoredUser(user: UserProfile | null) {
@@ -75,13 +62,12 @@ function setStoredUser(user: UserProfile | null) {
   }
 }
 
-const initialToken = getStoredToken();
 const initialUser = getStoredUser();
 
 const initialState: AuthState = {
   user: initialUser,
-  token: initialToken,
-  isAuthenticated: Boolean(initialToken && initialUser),
+  token: null, // JWT lives in the httpOnly cookie; never client-persisted
+  isAuthenticated: Boolean(initialUser), // revalidated at boot via fetchCurrentUser
   loading: false,
   error: null,
   successMessage: null,
@@ -97,11 +83,10 @@ export const loginUser = createAsyncThunk<
 >('auth/loginUser', async (credentials, { rejectWithValue }) => {
   try {
     const data = await authService.login(credentials);
-    setStoredToken(data.access_token);
     setStoredUser(data.user);
     return data;
-  } catch (err: any) {
-    return rejectWithValue(err.message || 'Failed to login');
+  } catch (err) {
+    return rejectWithValue((err instanceof Error && err.message) || 'Failed to login');
   }
 });
 
@@ -112,11 +97,10 @@ export const registerUser = createAsyncThunk<
 >('auth/registerUser', async (credentials, { rejectWithValue }) => {
   try {
     const data = await authService.register(credentials);
-    setStoredToken(data.access_token);
     setStoredUser(data.user);
     return data;
-  } catch (err: any) {
-    return rejectWithValue(err.message || 'Failed to register account');
+  } catch (err) {
+    return rejectWithValue((err instanceof Error && err.message) || 'Failed to register account');
   }
 });
 
@@ -127,11 +111,10 @@ export const resetPassword = createAsyncThunk<
 >('auth/resetPassword', async (credentials, { rejectWithValue }) => {
   try {
     const data = await authService.resetPassword(credentials);
-    setStoredToken(data.access_token);
     setStoredUser(data.user);
     return data;
-  } catch (err: any) {
-    return rejectWithValue(err.message || 'Failed to reset password');
+  } catch (err) {
+    return rejectWithValue((err instanceof Error && err.message) || 'Failed to reset password');
   }
 });
 
@@ -142,38 +125,41 @@ export const deleteAccount = createAsyncThunk<
 >('auth/deleteAccount', async (_, { rejectWithValue }) => {
   try {
     const data = await authService.deleteAccount();
-    setStoredToken(null);
     setStoredUser(null);
     return data;
-  } catch (err: any) {
-    return rejectWithValue(err.message || 'Failed to delete account');
+  } catch (err) {
+    return rejectWithValue((err instanceof Error && err.message) || 'Failed to delete account');
   }
 });
 
-export const deleteAccountByEmail = createAsyncThunk<
-  { deleted: boolean; email: string },
-  AccountDeletePayload,
-  { rejectValue: string }
->('auth/deleteAccountByEmail', async (payload, { rejectWithValue }) => {
+export const logoutUser = createAsyncThunk<
+  void,
+  void,
+  { rejectValue: never }
+>('auth/logoutUser', async () => {
+  // Best-effort server logout — clears the httpOnly auth cookies. A network
+  // failure must not block the local UI reset (they are retried never; cookies
+  // expire on their own via Max-Age).
   try {
-    const data = await authService.deleteAccountByEmail(payload);
-    return data;
-  } catch (err: any) {
-    return rejectWithValue(err.message || 'Failed to delete account');
+    await authService.logout();
+  } catch {
+    // ignore — local state is cleared regardless
   }
+  setStoredUser(null);
 });
 
 export const fetchCurrentUser = createAsyncThunk<
   UserProfile,
   void,
   { rejectValue: string }
->('auth/fetchCurrentUser', async (_, { rejectWithValue }) => {
+>('auth/fetchCurrentUser', async (_, { rejectWithValue, signal }) => {
   try {
-    const user = await authService.getCurrentUser();
+    const user = await authService.getCurrentUser(signal);
+    if (signal.aborted) return rejectWithValue('Session check superseded.');
     setStoredUser(user);
     return user;
-  } catch (err: any) {
-    return rejectWithValue(err.message || 'Failed to fetch current user profile');
+  } catch (err) {
+    return rejectWithValue((err instanceof Error && err.message) || 'Failed to fetch current user profile');
   }
 });
 
@@ -186,24 +172,34 @@ export const updateUserProfile = createAsyncThunk<
     const updatedUser = await authService.updateProfile(payload);
     setStoredUser(updatedUser);
     return updatedUser;
-  } catch (err: any) {
-    return rejectWithValue(err.message || 'Failed to update profile');
+  } catch (err) {
+    return rejectWithValue((err instanceof Error && err.message) || 'Failed to update profile');
   }
 });
+
+/** Shared local reset for every logout path (reducer + thunk). */
+function clearLocalAuth(state: AuthState) {
+  setStoredUser(null);
+  state.user = null;
+  state.token = null;
+  state.isAuthenticated = false;
+  state.error = null;
+  state.successMessage = null;
+  state.isProfileModalOpen = false;
+}
 
 const authSlice = createSlice({
   name: 'auth',
   initialState,
   reducers: {
-    logout: (state) => {
-      setStoredToken(null);
-      setStoredUser(null);
+    invalidateCachedSession: (state) => {
       state.user = null;
       state.token = null;
       state.isAuthenticated = false;
-      state.error = null;
-      state.successMessage = null;
       state.isProfileModalOpen = false;
+    },
+    logout: (state) => {
+      clearLocalAuth(state);
     },
     openAuthModal: (
       state,
@@ -322,34 +318,26 @@ const authSlice = createSlice({
         state.error = action.payload || 'Account deletion failed';
       });
 
-    // Delete Account by Email (Recovery)
-    builder
-      .addCase(deleteAccountByEmail.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(deleteAccountByEmail.fulfilled, (state) => {
-        state.loading = false;
-        state.error = null;
-        state.successMessage = 'Account has been removed. You can now create a fresh profile.';
-        state.authModalTab = 'register';
-      })
-      .addCase(deleteAccountByEmail.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload || 'Account deletion failed';
-      });
-
     // Fetch Profile
     builder
       .addCase(fetchCurrentUser.fulfilled, (state, action) => {
         state.user = action.payload;
         state.isAuthenticated = true;
       })
-      .addCase(fetchCurrentUser.rejected, (state) => {
-        // Token might have expired
+      .addCase(fetchCurrentUser.rejected, (state, action) => {
+        if (action.meta.aborted) return;
+        // Cookie session is invalid/expired
         state.user = null;
         state.token = null;
         state.isAuthenticated = false;
+      })
+
+      // Server-aware logout (clears the httpOnly cookies backend-side)
+      .addCase(logoutUser.fulfilled, (state) => {
+        clearLocalAuth(state);
+      })
+      .addCase(logoutUser.rejected, (state) => {
+        clearLocalAuth(state);
       });
 
     // Update Profile
@@ -371,6 +359,7 @@ const authSlice = createSlice({
 });
 
 export const {
+  invalidateCachedSession,
   logout,
   openAuthModal,
   closeAuthModal,

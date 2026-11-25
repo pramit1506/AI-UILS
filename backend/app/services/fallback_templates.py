@@ -29,14 +29,17 @@ class FallbackTemplateService:
         if not missing_fields:
             return "I've updated the log draft. What else would you like to add or change?"
 
-        # Build a friendly message mentioning what we already have
+        # Build a friendly message mentioning a couple of details we already
+        # captured (schema-driven: any populated draft field, generic naming).
         draft = state.get("log_draft")
         have_parts = []
         if draft:
-            if draft.fields.get("vendor"):
-                have_parts.append(f"vendor ({draft.fields['vendor']})")  
-            if draft.fields.get("total_amount"):
-                have_parts.append(f"total amount ({draft.fields['total_amount']})")
+            for key, value in (draft.fields or {}).items():
+                if key.startswith("_") or value is None or (isinstance(value, str) and not value.strip()):
+                    continue
+                have_parts.append(f"{key.replace('_', ' ')} ({value})")
+                if len(have_parts) >= 2:
+                    break
 
         target_field = missing_fields[0].replace("_", " ")
         if have_parts and len(have_parts) <= 2:

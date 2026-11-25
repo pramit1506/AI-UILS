@@ -60,6 +60,11 @@ class ConversationResponseMapper:
                 created_resource_id=resource_id,
                 success_message=success_msg,
                 validation_warnings=validation_errors,
+                tool_name=(
+                    (final_state.get("selected_tool").value
+                     if hasattr(final_state.get("selected_tool"), "value")
+                     else final_state.get("selected_tool"))
+                ),
             )
 
         conversation_status = final_state.get("conversation_status", ConversationStatus.COLLECTING_INFORMATION)
@@ -79,6 +84,7 @@ class ConversationResponseMapper:
             assistant_message=llm_response,
             conversation_id=final_state.get("conversation_id", ""),
             log_draft=draft,
+            extraction_used_fallback=final_state.get("extraction_used_fallback", False),
             draft_status=draft_status,
             draft_changes=field_changes,
             clarification_state=final_state.get("clarification_state"),

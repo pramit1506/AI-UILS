@@ -11,6 +11,8 @@ def route_after_intent(state: GraphState) -> str:
     
     if intent == "conversation":
         next_node = "response_node"
+    elif intent in ("search_logs", "save_reviewed"):
+        next_node = "tool_execution_node"
     else:
         next_node = "entity_extraction_node"
         

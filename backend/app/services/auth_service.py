@@ -8,7 +8,6 @@ from app.core.security import get_password_hash, verify_password, create_access_
 from app.models.user import User
 from app.repositories.user_repository import user_repository
 from app.schemas.user import (
-    AccountDeleteRequest,
     PasswordResetRequest,
     UserCreate,
     UserLogin,
@@ -42,20 +41,21 @@ class AuthService:
             )
 
         hashed_password = get_password_hash(user_in.password)
+        # Security: role is always server-assigned. Never trust a client-provided role.
         user = await user_repository.create_user(
             db,
             email=user_in.email,
             username=user_in.username,
             hashed_password=hashed_password,
             full_name=user_in.full_name,
-            role=user_in.role or "user",
+            role="user",
             avatar_url=user_in.avatar_url,
             bio=user_in.bio,
         )
 
         token = create_access_token(
             subject=str(user.id),
-            extra_claims={"username": user.username, "email": user.email, "role": user.role}
+            extra_claims={"username": user.username, "email": user.email, "role": user.role, "ver": user.session_version or 0}
         )
         logger.info(f"User registered successfully: {user.username} ({user.id})")
         return user, token
@@ -87,28 +87,38 @@ class AuthService:
 
         token = create_access_token(
             subject=str(user.id),
-            extra_claims={"username": user.username, "email": user.email, "role": user.role}
+            extra_claims={"username": user.username, "email": user.email, "role": user.role, "ver": user.session_version or 0}
         )
         logger.info(f"User logged in: {user.username} ({user.id})")
         return user, token
 
     async def reset_password(
-        self, db: AsyncSession, reset_in: PasswordResetRequest
+        self, db: AsyncSession, user: User, reset_in: PasswordResetRequest
     ) -> Tuple[User, str]:
         """
-        Reset a user's password using their email or username and immediately issue a new access token.
+        Change the authenticated user's password after verifying the current one.
+
+        Security: this is no longer a "reset by knowing the email" flow — the caller
+        must supply a valid Bearer token (enforced at the endpoint) plus the current
+        password, which is verified here.
         """
-        user = await user_repository.get_by_login(db, reset_in.login)
-        if not user:
+        if not verify_password(reset_in.current_password, user.hashed_password):
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No account found matching this email or username.",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Current password is incorrect.",
+                headers={"WWW-Authenticate": "Bearer"},
             )
 
         if len(reset_in.new_password) < 6:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="New password must be at least 6 characters long.",
+            )
+
+        if verify_password(reset_in.new_password, user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="New password must be different from the current password.",
             )
 
         new_hashed = get_password_hash(reset_in.new_password)
@@ -122,6 +132,7 @@ class AuthService:
                 "username": updated_user.username,
                 "email": updated_user.email,
                 "role": updated_user.role,
+                "ver": updated_user.session_version or 0,
             },
         )
         logger.info(f"Password reset successfully for user: {updated_user.username} ({updated_user.id})")
@@ -132,22 +143,6 @@ class AuthService:
         Permanently delete an authenticated user account and all associated log records.
         """
         logger.info(f"Deleting user account: {user.username} ({user.id})")
-        await user_repository.delete_user(db, user)
-
-    async def delete_account_by_email(
-        self, db: AsyncSession, delete_in: AccountDeleteRequest
-    ) -> None:
-        """
-        Delete an account by email for account recovery / purging orphaned accounts.
-        """
-        user = await user_repository.get_by_email(db, delete_in.email)
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No account found with this email address.",
-            )
-
-        logger.info(f"Account deleted via recovery request: {user.email} ({user.id})")
         await user_repository.delete_user(db, user)
 
     async def update_profile(self, db: AsyncSession, user: User, update_in: UserUpdate) -> User:

@@ -10,18 +10,37 @@ No API key required — Ollama runs entirely on your local machine.
 
 import json
 import re
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, List, Optional, Type
 
 import httpx
 from pydantic import BaseModel
 
 from app.llm.base import BaseLLMProvider, T
+from app.llm.output_parser import extract_json_block, strip_markdown_fences
 from app.core.config import settings
 from app.exceptions.base import (
     ProviderException,
     TimeoutException,
     ModelUnavailableException,
 )
+
+
+# httpx clients created by this module — closed by shutdown_llm_clients().
+_active_clients: List[httpx.AsyncClient] = []
+
+
+async def shutdown_llm_clients() -> None:
+    """
+    Close every httpx.AsyncClient this module created. Idempotent and safe to
+    call repeatedly (including when no client was ever created).
+    """
+    for client in list(_active_clients):
+        try:
+            if not client.is_closed:
+                await client.aclose()
+        except Exception:  # pragma: no cover — best-effort shutdown
+            pass
+    _active_clients.clear()
 
 
 class OllamaProvider(BaseLLMProvider):
@@ -37,6 +56,7 @@ class OllamaProvider(BaseLLMProvider):
         self.timeout = settings.MODEL_TIMEOUT
         # httpx async client — reused for the lifetime of the provider instance
         self._client = httpx.AsyncClient(base_url=self.base_url, timeout=self.timeout)
+        _active_clients.append(self._client)
 
     # ── helpers ─────────────────────────────────────────────────────────────
 
@@ -119,10 +139,12 @@ class OllamaProvider(BaseLLMProvider):
         raw = await self._chat(messages, model=model, temperature=0.0, json_mode=True)
         cleaned = self._clean_think_tags(raw)
 
-        # Ollama JSON mode usually returns a clean object; extract if wrapped in markdown
-        if not cleaned.strip().startswith("{"):
-            match = re.search(r"\{[\s\S]*\}", cleaned)
-            if match:
-                cleaned = match.group(0)
+        # Robust extraction: markdown fences, prose before/after, nested
+        # braces and truncated output are handled by the deterministic
+        # balanced scanner in app.llm.output_parser (replaces the old greedy
+        # re.search(r'{[\s\S]*}', ...) approach).
+        candidate = extract_json_block(cleaned)
+        if candidate is None:
+            candidate = strip_markdown_fences(cleaned).strip() or cleaned
 
-        return schema.model_validate_json(cleaned)
+        return schema.model_validate_json(candidate)

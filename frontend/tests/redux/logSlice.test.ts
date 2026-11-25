@@ -4,13 +4,12 @@ import logReducer, {
   setFieldStatus,
   editFieldValue,
   bulkApproveAll,
+  markLogSaved,
   bulkApproveHighConfidence,
   bulkRejectAll,
-  bulkRejectUnapproved,
   resetFieldStatuses,
   selectNextField,
   selectPrevField,
-  setActiveFieldKey,
   setViewLayoutMode,
 } from '../../src/redux/logSlice';
 
@@ -54,6 +53,15 @@ describe('logSlice review & bulk operations', () => {
     expect(state.fieldStatuses.vendor).toBe('approved');
     expect(state.fieldStatuses.total_amount).toBe('approved');
     expect(state.fieldStatuses.low_conf_field).toBe('approved');
+  });
+
+  it('keeps the saved reference until bulk review changes which fields will be stored', () => {
+    let state = logReducer(undefined, setLog({ draft: initialDraft, updatedFields: [] }));
+    state = logReducer(state, markLogSaved('LOG-001'));
+    state = logReducer(state, bulkApproveAll());
+    expect(state.savedLogReference).toBe('LOG-001');
+    state = logReducer(state, bulkRejectAll());
+    expect(state.savedLogReference).toBeNull();
   });
 
   it('supports bulkApproveHighConfidence (≥ 0.75)', () => {
@@ -121,7 +129,7 @@ describe('logSlice review & bulk operations', () => {
   });
 
   it('supports setting view layout modes', () => {
-    let state = logReducer(undefined, setViewLayoutMode('review-focus'));
+    const state = logReducer(undefined, setViewLayoutMode('review-focus'));
     expect(state.viewLayoutMode).toBe('review-focus');
   });
 });

@@ -1,7 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { User, Save, Copy, Check, Sparkles, ArrowRight, Brain, ChevronDown, ChevronRight } from 'lucide-react';
-import { useAppDispatch, useAppSelector } from '../../redux/hooks';
-import { addUserMessage, sendMessage } from '../../redux/chatSlice';
+import { User, Copy, Check, Sparkles, Brain, ChevronDown, ChevronRight } from 'lucide-react';
 import { ChatMessage as IChatMessage } from '../../types/chat';
 import { ToolExecutionCard } from './ToolExecutionCard';
 import { ClarificationCard } from './ClarificationCard';
@@ -9,12 +7,9 @@ import './Chat.css';
 
 interface ChatMessageProps {
   message: IChatMessage;
-  onSaveLog?: () => void;
 }
 
-export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onSaveLog }) => {
-  const dispatch = useAppDispatch();
-  const currentLog = useAppSelector((state) => state.log.currentLog);
+export const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
   const [showThinking, setShowThinking] = useState(false);
@@ -36,41 +31,18 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onSaveLog }) 
   }, [message.content]);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(cleanContent || message.content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleTriggerSave = () => {
-    if (onSaveLog) {
-      onSaveLog();
-    } else {
-      dispatch(addUserMessage('Save the log'));
-      dispatch(sendMessage('Save the log') as any);
-    }
+    // Clipboard API rejects in non-secure contexts (plain HTTP deployments) —
+    // swallow instead of surfacing an unhandled rejection.
+    navigator.clipboard?.writeText(cleanContent || message.content).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => setCopied(false));
   };
 
   const timeStr = new Date(message.timestamp).toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
   });
-
-  const hasFields = Boolean(
-    currentLog &&
-      currentLog.fields &&
-      Object.keys(currentLog.fields).filter((k) => !k.startsWith('_')).length > 0
-  );
-
-  // Check if message suggests saving or contains captured draft info
-  const showInlineSavePrompt =
-    !isUser &&
-    hasFields &&
-    (cleanContent.toLowerCase().includes('save the log') ||
-      cleanContent.toLowerCase().includes('draft is ready') ||
-      cleanContent.toLowerCase().includes('captured') ||
-      cleanContent.toLowerCase().includes('extracted') ||
-      cleanContent.toLowerCase().includes('review the') ||
-      Boolean(message.tool_executions && message.tool_executions.length > 0));
 
   return (
     <div className={`chat-message-wrapper ${isUser ? 'user' : 'assistant'}`}>
@@ -104,30 +76,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onSaveLog }) 
             </div>
           )}
 
-          {cleanContent && (
+          {cleanContent && !(message.clarification_request?.required && message.clarification_request.question?.trim() === cleanContent.trim()) && (
             <div className="chat-message-bubble">{cleanContent}</div>
-          )}
-
-          {/* Direct Save Action inside Message Card */}
-          {showInlineSavePrompt && (
-            <div className="chat-inline-save-card">
-              <div className="chat-inline-save-info">
-                <div className="chat-inline-save-icon-wrap">
-                  <Save size={14} />
-                </div>
-                <span className="chat-inline-save-text">
-                  Ready to commit this {currentLog?.schema_name || 'record'}?
-                </span>
-              </div>
-              <button
-                className="chat-inline-save-btn"
-                onClick={handleTriggerSave}
-                title="Save and commit this log to database"
-              >
-                <span>Save Now</span>
-                <ArrowRight size={12} />
-              </button>
-            </div>
           )}
 
           {!isUser &&
@@ -141,16 +91,6 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onSaveLog }) 
       <div className="chat-message-footer">
         <span className="chat-message-time">{timeStr}</span>
         <div className="chat-message-footer-actions">
-          {!isUser && hasFields && (
-            <button
-              className="chat-message-save-link"
-              onClick={handleTriggerSave}
-              title="Save this log"
-            >
-              <Save size={11} />
-              <span>Save Log</span>
-            </button>
-          )}
           {!isUser && (
             <button
               className="chat-message-copy"

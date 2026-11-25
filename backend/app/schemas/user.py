@@ -14,7 +14,9 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=6, max_length=100)
-    role: Optional[str] = Field("user", max_length=50)
+    # NOTE: `role` was removed deliberately — it was client-supplied and allowed
+    # privilege self-escalation (any registrant could send role="admin").
+    # Roles are now assigned server-side only.
 
 
 class UserLogin(BaseModel):
@@ -50,10 +52,21 @@ class TokenResponse(BaseModel):
 
 
 class PasswordResetRequest(BaseModel):
-    login: str = Field(..., description="Email address or username of the account to reset")
+    """
+    Authenticated password change.
+
+    Security: password changes require a valid Bearer token AND the current
+    password. The previous unauthenticated design (email/username + new password)
+    let anyone who knew a user's email take over the account.
+    """
+    current_password: str = Field(..., description="Current password for verification")
     new_password: str = Field(..., min_length=6, max_length=100, description="New password")
 
 
-class AccountDeleteRequest(BaseModel):
-    email: EmailStr = Field(..., description="Email address of the account to delete")
-    confirm_text: Optional[str] = Field("DELETE", description="Confirmation text to prevent accidental deletion")
+class RecoveryEmail(BaseModel):
+    email: EmailStr
+
+
+class RecoveryConfirmation(RecoveryEmail):
+    code: str = Field(pattern=r"^[0-9]{6}$")
+    new_password: str = Field(min_length=6, max_length=100)

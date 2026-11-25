@@ -1,3 +1,4 @@
+import { editedValue, fieldInput } from '../../utils/fieldValue';
 import React, { useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import {
   Receipt,
@@ -17,12 +18,10 @@ import {
   Edit2,
   Clock,
   Sparkles,
-  Save,
   RotateCcw,
   Zap,
   Search,
   MessageSquare,
-  Keyboard,
   CheckCheck
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
@@ -35,11 +34,11 @@ import {
   bulkRejectAll,
   resetFieldStatuses,
   setActiveFieldKey,
-  toggleShortcutsModal,
 } from '../../redux/logSlice';
 import { setActiveHighlightField } from '../../redux/documentSlice';
 import { addUserMessage, sendMessage } from '../../redux/chatSlice';
 import { useReviewShortcuts } from '../../hooks/useReviewShortcuts';
+import { useSaveLog } from '../../hooks/useSaveLog';
 import { FieldReviewStatus } from '../../types/log';
 import './LogForm.css';
 
@@ -64,7 +63,7 @@ function formatFieldLabel(key: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function formatFieldValue(value: any): { display: string; isEmpty: boolean } {
+function formatFieldValue(value: unknown): { display: string; isEmpty: boolean } {
   if (value === null || value === undefined || value === '') {
     return { display: '—', isEmpty: true };
   }
@@ -140,7 +139,15 @@ const EditableSessionName: React.FC<{
           placeholder="Enter document name…"
           maxLength={60}
         />
-        <button className="dlf-name-confirm-btn" onMouseDown={commit} title="Confirm name">
+        {/* onClick guard prevents the double commit: blur already commits
+            when the confirm button steals focus, so ignore click events that
+            arrive after the input has left editing mode. */}
+        <button
+          className="dlf-name-confirm-btn"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={commit}
+          title="Confirm name"
+        >
           <Check size={12} />
         </button>
       </div>
@@ -170,7 +177,7 @@ const EditableSessionName: React.FC<{
   );
 };
 
-export const DynamicLogForm: React.FC = () => {
+export const DynamicLogForm: React.FC<{ onSource?: () => void; onChat?: () => void; commitRef?: React.Ref<() => boolean> }> = ({ onSource, onChat, commitRef }) => {
   const dispatch = useAppDispatch();
   const currentLog = useAppSelector((state) => state.log.currentLog);
   const lastUpdatedFields = useAppSelector((state) => state.log.lastUpdatedFields);
@@ -188,6 +195,7 @@ export const DynamicLogForm: React.FC = () => {
   // Inline editing state for active card
   const [editingFieldKey, setEditingFieldKey] = useState<string | null>(null);
   const [editDraftValue, setEditDraftValue] = useState<string>('');
+  const [editError, setEditError] = useState('');
   const inlineEditInputRef = useRef<HTMLInputElement>(null);
 
   const hasFields = Boolean(
@@ -203,10 +211,8 @@ export const DynamicLogForm: React.FC = () => {
     [dispatch]
   );
 
-  const handleSave = useCallback(() => {
-    dispatch(addUserMessage('Save and commit the approved log'));
-    dispatch(sendMessage('Save and commit the approved log') as any);
-  }, [dispatch]);
+  const { triggerSave } = useSaveLog();
+
 
   // Conversational AI correction trigger
   const handleConversationalCorrection = useCallback(
@@ -214,9 +220,10 @@ export const DynamicLogForm: React.FC = () => {
       const currentVal = currentLog?.fields?.[fieldKey];
       const prompt = `Please correct the field "${fieldKey}" (currently "${currentVal}") based on the original document.`;
       dispatch(addUserMessage(prompt));
-      dispatch(sendMessage(prompt) as any);
+      dispatch(sendMessage(prompt));
+      onChat?.();
     },
-    [currentLog, dispatch]
+    [currentLog, dispatch, onChat]
   );
 
   // Trigger inline edit
@@ -224,7 +231,8 @@ export const DynamicLogForm: React.FC = () => {
     (fieldKey: string) => {
       const val = currentLog?.fields?.[fieldKey];
       setEditingFieldKey(fieldKey);
-      setEditDraftValue(val !== undefined && val !== null ? String(val) : '');
+      setEditError('');
+      setEditDraftValue(fieldInput(val));
     },
     [currentLog]
   );
@@ -237,15 +245,24 @@ export const DynamicLogForm: React.FC = () => {
 
   const handleCommitInlineEdit = useCallback(
     (fieldKey: string) => {
-      dispatch(editFieldValue({ fieldKey, value: editDraftValue }));
+      try {
+        dispatch(editFieldValue({ fieldKey, value: editedValue(currentLog?.fields?.[fieldKey], editDraftValue) }));
+      } catch (error) {
+        setEditError(error instanceof Error ? error.message : 'Invalid field value.');
+        inlineEditInputRef.current?.focus();
+        return false;
+      }
       setEditingFieldKey(null);
+      return true;
     },
-    [dispatch, editDraftValue]
+    [dispatch, editDraftValue, currentLog]
   );
 
   // Bind speed shortcuts
+  const commitPending = useCallback(() => !editingFieldKey || handleCommitInlineEdit(editingFieldKey), [editingFieldKey, handleCommitInlineEdit]);
+  React.useImperativeHandle(commitRef, () => commitPending, [commitPending]);
   useReviewShortcuts({
-    onSave: handleSave,
+    onSave: () => { if (commitPending()) triggerSave(); },
     onEditActiveField: handleStartInlineEdit,
     onConversationalCorrect: handleConversationalCorrection,
     enabled: true,
@@ -311,14 +328,6 @@ export const DynamicLogForm: React.FC = () => {
               isUserDefined={isSessionNameUserDefined}
               onSave={handleSaveName}
             />
-            <button
-              className="dlf-shortcuts-btn"
-              onClick={() => dispatch(toggleShortcutsModal())}
-              title="View speed review keyboard shortcuts (?)"
-            >
-              <Keyboard size={13} />
-              <span>Shortcuts</span>
-            </button>
           </div>
           {sessionDateLine}
         </div>
@@ -351,25 +360,6 @@ export const DynamicLogForm: React.FC = () => {
           />
           {domain && <span className="dlf-domain-tag">{domain}</span>}
           {source && <span className="dlf-source-tag">{source.toUpperCase()}</span>}
-          <div className="dlf-header-actions">
-            <button
-              className="dlf-header-save-btn"
-              onClick={handleSave}
-              title="Save and commit this log (Ctrl + Enter)"
-            >
-              <Save size={13} />
-              <span>Save Log</span>
-            </button>
-            <button
-              className="dlf-shortcuts-btn"
-              onClick={() => dispatch(toggleShortcutsModal())}
-              title="Keyboard shortcuts (?)"
-            >
-              <Keyboard size={13} />
-              <span>Shortcuts</span>
-              <kbd>?</kbd>
-            </button>
-          </div>
         </div>
         {sessionDateLine}
 
@@ -394,7 +384,7 @@ export const DynamicLogForm: React.FC = () => {
 
       {/* ─── Bulk Actions & Speed Controls ──────────────────── */}
       <div className="dlf-bulk-bar">
-        <div className="dlf-bulk-actions">
+        <div className="dlf-bulk-actions" role="group" aria-label="Bulk review actions">
           <button
             className="dlf-bulk-btn bulk-approve"
             onClick={() => dispatch(bulkApproveAll())}
@@ -416,7 +406,7 @@ export const DynamicLogForm: React.FC = () => {
           <button
             className="dlf-bulk-btn bulk-reject"
             onClick={() => dispatch(bulkRejectAll())}
-            title="Reject / flag all fields (Shift + R)"
+            title="Exclude all fields from the saved record (Shift + R)"
           >
             <X size={13} />
             <span>Reject All</span>
@@ -526,6 +516,7 @@ export const DynamicLogForm: React.FC = () => {
                     onClick={(e) => e.stopPropagation()}
                   >
                     <input
+                      aria-label={'Edit ' + formatFieldLabel(key)}
                       ref={inlineEditInputRef}
                       type="text"
                       className="dlf-inline-input"
@@ -536,6 +527,7 @@ export const DynamicLogForm: React.FC = () => {
                         if (e.key === 'Escape') setEditingFieldKey(null);
                       }}
                     />
+                    {editError && <span role="alert">{editError}</span>}
                     <button
                       className="dlf-editor-btn save"
                       onClick={() => handleCommitInlineEdit(key)}
@@ -576,7 +568,7 @@ export const DynamicLogForm: React.FC = () => {
                     onClick={() => {
                       dispatch(setFieldStatus({ fieldKey: key, status: 'rejected' }));
                     }}
-                    title="Reject / flag this field (R)"
+                    title="Exclude this field from the saved record (R)"
                   >
                     <X size={12} />
                     <span>Reject</span>
@@ -608,7 +600,9 @@ export const DynamicLogForm: React.FC = () => {
                     onClick={() => {
                       dispatch(setActiveFieldKey(key));
                       dispatch(setActiveHighlightField(key));
+                      onSource?.();
                     }}
+                    disabled={!onSource}
                     title="Locate & highlight in source document"
                   >
                     <Search size={12} />

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+﻿import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   FileText,
   FileCode,
@@ -24,16 +24,26 @@ import {
 } from '../../redux/documentSlice';
 import { editFieldValue, setLog } from '../../redux/logSlice';
 import { addUserMessage, sendMessage } from '../../redux/chatSlice';
+import { DynamicLogDraft } from '../../types/log';
+import { useSaveLog } from '../../hooks/useSaveLog';
 import './DocumentViewer.css';
 
-const SAMPLE_DOCS = [
+type SampleDoc = {
+  name: string;
+  displayName: string;
+  type: 'txt' | 'pdf';
+  text: string;
+  mockLog: DynamicLogDraft;
+};
+
+const SAMPLE_DOCS: SampleDoc[] = [
   {
     name: 'sample_invoice_INV-8492.txt',
     displayName: 'Invoice (INV-8492)',
     type: 'txt' as const,
     text: `ACME INDUSTRIAL SUPPLY CORP
 1044 Innovation Way, Suite 300, Austin, TX 78701
-Phone: (512) 555-0199 | Email: billing@acmesupply.com
+Phone: (512) 555-0199 | Email: billing@example.com
 
 INVOICE
 Invoice Number: INV-2026-8492
@@ -61,7 +71,7 @@ Wire Instructions:
 Bank: First National Commercial Bank
 Routing: 121000358
 Account: 948201948201
-Remit To: payments@acmesupply.com`,
+Remit To: payments@example.com`,
     mockLog: {
       schema_name: 'Invoice',
       domain: 'Finance',
@@ -150,7 +160,7 @@ PRESCRIPTION & TREATMENT:
     type: 'txt' as const,
     text: `ALEXANDER MORGAN
 Senior Full Stack Engineer
-San Francisco, CA | (415) 555-0182 | alex.morgan@devmail.io
+San Francisco, CA | (415) 555-0182 | alex.morgan@example.org
 
 CANDIDATE PROFILE:
 Candidate Name: Alexander Morgan
@@ -177,7 +187,7 @@ WORK EXPERIENCE:
         position_applied: 'Lead Systems Architect',
         years_of_experience: '8 years',
         highest_education: 'M.S. in Computer Science, Stanford University',
-        email: 'alex.morgan@devmail.io',
+        email: 'alex.morgan@example.org',
         skills: 'Python, TypeScript, React, PostgreSQL, LangGraph, Docker, Kubernetes',
       },
       field_metadata: {
@@ -236,7 +246,7 @@ Root Cause: Flow rate sensor calibration drift. Recommended firmware update v4.2
   },
 ];
 
-export const DocumentViewer: React.FC = () => {
+export const DocumentViewer: React.FC<{ onSaveRecord?: () => void }> = ({ onSaveRecord }) => {
   const dispatch = useAppDispatch();
   const currentDocument = useAppSelector((state) => state.document.currentDocument);
   const activeHighlightField = useAppSelector((state) => state.document.activeHighlightField);
@@ -256,10 +266,11 @@ export const DocumentViewer: React.FC = () => {
     dispatch(setSearchQuery(e.target.value));
   };
 
+  const { saved: logSaved, savedReference, triggerSave } = useSaveLog();
+
   const handleSaveLog = useCallback(() => {
-    dispatch(addUserMessage('Save the log'));
-    dispatch(sendMessage('Save the log') as any);
-  }, [dispatch]);
+    triggerSave();
+  }, [triggerSave]);
 
   const activeFieldValue = useMemo(() => {
     if (!currentLog?.fields || !activeHighlightField) return null;
@@ -326,12 +337,11 @@ export const DocumentViewer: React.FC = () => {
     dispatch(
       setLog({
         draft: sample.mockLog,
-        updatedFields: Object.keys(sample.mockLog.fields),
+        newDocument: true,
+        updatedFields: Object.keys(sample.mockLog.fields ?? {}),
       })
     );
-    const textToProcess = `Process this uploaded document (${sample.name}):\n\n${sample.text}`;
-    dispatch(addUserMessage(textToProcess));
-    dispatch(sendMessage(textToProcess) as any);
+    dispatch(addUserMessage(`Opened sample document: ${sample.name}`));
   };
 
   const handleAssignToActiveField = () => {
@@ -348,7 +358,7 @@ export const DocumentViewer: React.FC = () => {
         ? `Please update the field "${activeFieldKey}" to "${selectedText}" based on the document.`
         : `Please extract this value from document: "${selectedText}"`;
       dispatch(addUserMessage(prompt));
-      dispatch(sendMessage(prompt) as any);
+      dispatch(sendMessage(prompt));
       setSelectedText('');
       setSelectionPosition(null);
     }
@@ -356,7 +366,11 @@ export const DocumentViewer: React.FC = () => {
 
   const handleCopySelectedText = () => {
     if (selectedText) {
-      navigator.clipboard.writeText(selectedText);
+      // Clipboard API rejects in non-secure contexts — swallow instead of
+      // surfacing an unhandled rejection to the global error logger.
+      navigator.clipboard.writeText(selectedText).catch(() => {
+        /* clipboard unavailable — non-fatal */
+      });
       setCopied(true);
       setTimeout(() => {
         setCopied(false);
@@ -420,9 +434,13 @@ export const DocumentViewer: React.FC = () => {
             if (targetValue && lowerPart === targetValue) {
               return (
                 <mark
-                  key={pIdx}
+                  key={`${pIdx}-${activeHighlightField ?? ''}`}
                   ref={(el) => {
-                    if (el && !activeHighlightRef.current) {
+                    // Overwrite the ref for the current highlight so the
+                    // "Find" scroll always targets the *active* field — the
+                    // old `!activeHighlightRef.current` guard kept the first
+                    // mark (possibly detached) forever.
+                    if (el) {
                       activeHighlightRef.current = el;
                     }
                   }}
@@ -443,10 +461,10 @@ export const DocumentViewer: React.FC = () => {
             return <span key={pIdx}>{part}</span>;
           });
         } else {
-          elements = [<span>{line}</span>];
+          elements = [<span key={0}>{line}</span>];
         }
       } else {
-        elements = [<span>{line}</span>];
+        elements = [<span key={0}>{line}</span>];
       }
 
       return (
@@ -465,12 +483,9 @@ export const DocumentViewer: React.FC = () => {
           <div className="doc-empty-icon-wrap">
             <Layers size={28} />
           </div>
-          <h3>Original Document Viewer</h3>
-          <p>
-            Upload a PDF, DOCX, TXT or paste text in chat to inspect raw document sources side-by-side with verified fields.
-          </p>
+          <h3>Sample documents</h3>
           <div className="doc-sample-actions">
-            <span className="doc-sample-label">Load sample data from different business domains:</span>
+            <span className="doc-sample-label">Choose a document to review its fields.</span>
             <div className="doc-sample-grid">
               {SAMPLE_DOCS.map((doc, idx) => (
                 <button
@@ -535,18 +550,6 @@ export const DocumentViewer: React.FC = () => {
             )}
           </div>
 
-          {/* Quick Save in Document Viewer */}
-          {hasFields && (
-            <button
-              className="doc-save-btn"
-              onClick={handleSaveLog}
-              title="Save and commit this log (Ctrl + Enter)"
-            >
-              <Save size={13} />
-              <span>Save</span>
-            </button>
-          )}
-
           {/* View mode toggle (Text vs PDF if PDF URL exists) */}
           {currentDocument.fileUrl && (
             <div className="doc-mode-toggle">
@@ -606,6 +609,9 @@ export const DocumentViewer: React.FC = () => {
             src={currentDocument.fileUrl}
             title="Document PDF Preview"
             className="doc-pdf-frame"
+            // Sandboxed: PDFs can embed JavaScript; without this a crafted
+            // PDF preview runs scripts with full page-origin access.
+            sandbox="allow-same-origin"
           />
         ) : (
           <div className="doc-text-grid">{renderHighlightedDocument()}</div>
@@ -621,6 +627,7 @@ export const DocumentViewer: React.FC = () => {
             top: `${selectionPosition.y}px`,
           }}
           onMouseDown={(e) => e.stopPropagation()}
+          onMouseUp={(e) => e.stopPropagation()}
         >
           <span className="doc-popover-text" title={selectedText}>
             "{selectedText.slice(0, 20)}
@@ -647,15 +654,21 @@ export const DocumentViewer: React.FC = () => {
             <Wand2 size={12} />
             <span>AI Fix</span>
           </button>
-          {hasFields && (
+          {hasFields && !logSaved && (
             <button
               className="doc-popover-btn save"
-              onClick={handleSaveLog}
+              onClick={onSaveRecord ?? handleSaveLog}
               title="Save current log record"
             >
               <Save size={12} />
               <span>Save</span>
             </button>
+          )}
+          {hasFields && logSaved && (
+            <span className="doc-popover-btn save saved" title={`Already saved as ${savedReference}`}>
+              <Check size={12} />
+              <span>Saved</span>
+            </span>
           )}
           <button
             className="doc-popover-btn copy"

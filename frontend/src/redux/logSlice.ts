@@ -12,13 +12,18 @@ interface LogState {
   /** Review status per field key (approved, rejected, pending, edited) */
   fieldStatuses: Record<string, FieldReviewStatus>;
   /** User manual edits */
-  editedFieldValues: Record<string, any>;
+  editedFieldValues: Record<string, unknown>;
   /** Currently active / focused field for keyboard cursor navigation */
   activeFieldKey: string | null;
   /** Multi-panel layout configuration */
   viewLayoutMode: ViewLayoutMode;
   /** Shortcut modal visibility */
   isShortcutsModalOpen: boolean;
+  /** Log reference assigned by the backend when this draft was saved
+   *  (e.g. "LOG-3C2B3CBE"). Null while the draft has unsaved changes. */
+  savedLogReference: string | null;
+  /** ISO timestamp of the last successful save */
+  savedAt: string | null;
 }
 
 const initialState: LogState = {
@@ -32,6 +37,8 @@ const initialState: LogState = {
   activeFieldKey: null,
   viewLayoutMode: 'side-by-side',
   isShortcutsModalOpen: false,
+  savedLogReference: null,
+  savedAt: null,
 };
 
 function getFieldKeys(draft: DynamicLogDraft | null): string[] {
@@ -39,39 +46,92 @@ function getFieldKeys(draft: DynamicLogDraft | null): string[] {
   return Object.keys(draft.fields).filter((k) => !k.startsWith('_'));
 }
 
+function applyReviewStatus(state: LogState, key: string, status: FieldReviewStatus) {
+  if ((state.fieldStatuses[key] === 'rejected') !== (status === 'rejected')) {
+    state.savedLogReference = null;
+    state.savedAt = null;
+  }
+  state.fieldStatuses[key] = status;
+}
+
 const logSlice = createSlice({
   name: 'log',
   initialState,
   reducers: {
-    setLog: (state, action: PayloadAction<{ draft: DynamicLogDraft | null; updatedFields: string[] }>) => {
+    setLog: (state, action: PayloadAction<{ draft: DynamicLogDraft | null; updatedFields: string[]; newDocument?: boolean }>) => {
       const newDraft = action.payload.draft;
+      if (action.payload.newDocument) {
+        state.fieldStatuses = {};
+        state.editedFieldValues = {};
+        state.activeFieldKey = null;
+        state.sessionName = null;
+        state.isSessionNameUserDefined = false;
+      }
+      // Capture the previous field values BEFORE the draft is replaced so we
+      // can detect whether a field's value actually changed.
+      const prevValues = state.currentLog?.fields || {};
+      const prevStatuses = state.fieldStatuses;
       state.currentLog = newDraft;
       state.lastUpdatedFields = action.payload.updatedFields;
 
-      // Auto-populate session name from AI inference, but don't override a user-defined name
-      if (!state.isSessionNameUserDefined && newDraft?.schema_name) {
-        state.sessionName = newDraft.schema_name;
+      // Any genuinely new/changed field means the saved snapshot no longer
+      // matches the draft — reset the saved state so the user can save again
+      // (and so duplicate-save prevention is lifted correctly).
+      if (action.payload.newDocument || action.payload.updatedFields.length > 0) {
+        state.savedLogReference = null;
+        state.savedAt = null;
       }
 
-      // Initialize field statuses for any new fields without overriding existing reviewed states
+      // Review statuses are per-document. Previously same-named fields in a
+      // *different* document silently inherited the old document's
+      // approved/rejected state. A field keeps its status only while its
+      // value is unchanged; new or changed fields reset to `pending`.
+      const nextStatuses: Record<string, FieldReviewStatus> = {};
       if (newDraft?.fields) {
-        const currentKeys = Object.keys(newDraft.fields).filter((k) => !k.startsWith('_'));
-        const nextStatuses: Record<string, FieldReviewStatus> = { ...state.fieldStatuses };
+        const draftFields = newDraft.fields;
+        const currentKeys = Object.keys(draftFields).filter((k) => !k.startsWith('_'));
 
         currentKeys.forEach((key) => {
-          if (!nextStatuses[key]) {
-            nextStatuses[key] = 'pending';
-          }
+          const value = draftFields[key];
+          const previousValue = prevValues[key];
+          const unchanged =
+            key in prevStatuses && JSON.stringify(value) === JSON.stringify(previousValue);
+          nextStatuses[key] = unchanged ? prevStatuses[key] : 'pending';
         });
         state.fieldStatuses = nextStatuses;
 
         if (!state.activeFieldKey && currentKeys.length > 0) {
           state.activeFieldKey = currentKeys[0];
         }
+      } else {
+        state.fieldStatuses = {};
+      }
+
+      // Drop edit-value bookkeeping for fields that no longer exist.
+      const survivingEdited: Record<string, unknown> = {};
+      Object.keys(state.editedFieldValues).forEach((key) => {
+        if (newDraft?.fields && key in newDraft.fields) {
+          survivingEdited[key] = state.editedFieldValues[key];
+        }
+      });
+      state.editedFieldValues = survivingEdited;
+      // A user-defined name only persists within the same document set.
+      state.isSessionNameUserDefined = newDraft?.schema_name
+        ? state.isSessionNameUserDefined
+        : false;
+
+      // Auto-populate session name from AI inference, but don't override a user-defined name
+      if (!state.isSessionNameUserDefined && newDraft?.schema_name) {
+        state.sessionName = newDraft.schema_name;
       }
     },
     /** User explicitly sets a custom session/document name */
     setSessionName: (state, action: PayloadAction<string>) => {
+      if (state.sessionName !== action.payload) {
+        state.savedLogReference = null;
+        state.savedAt = null;
+        if (state.currentLog) state.currentLog.schema_name = action.payload;
+      }
       state.sessionName = action.payload;
       state.isSessionNameUserDefined = true;
     },
@@ -80,11 +140,11 @@ const logSlice = createSlice({
       action: PayloadAction<{ fieldKey: string; status: FieldReviewStatus }>
     ) => {
       const { fieldKey, status } = action.payload;
-      state.fieldStatuses[fieldKey] = status;
+      applyReviewStatus(state, fieldKey, status);
     },
     editFieldValue: (
       state,
-      action: PayloadAction<{ fieldKey: string; value: any }>
+      action: PayloadAction<{ fieldKey: string; value: unknown }>
     ) => {
       const { fieldKey, value } = action.payload;
       if (state.currentLog && state.currentLog.fields) {
@@ -92,11 +152,14 @@ const logSlice = createSlice({
       }
       state.editedFieldValues[fieldKey] = value;
       state.fieldStatuses[fieldKey] = 'edited';
+      // Manual edits invalidate the previously saved record.
+      state.savedLogReference = null;
+      state.savedAt = null;
     },
     bulkApproveAll: (state) => {
       const keys = getFieldKeys(state.currentLog);
       keys.forEach((key) => {
-        state.fieldStatuses[key] = 'approved';
+        applyReviewStatus(state, key, 'approved');
       });
     },
     bulkApproveHighConfidence: (state, action: PayloadAction<number | undefined>) => {
@@ -105,30 +168,33 @@ const logSlice = createSlice({
       const metadata = state.currentLog?.field_metadata || {};
 
       keys.forEach((key) => {
-        const conf = metadata[key]?.confidence ?? 0.8;
-        if (conf >= threshold) {
-          state.fieldStatuses[key] = 'approved';
+        // Fields with NO confidence metadata are the least trustworthy —
+        // treating missing data as a high 0.8 confidence silently approved
+        // unknown-quality fields. Missing confidence now never auto-approves.
+        const conf = metadata[key]?.confidence;
+        if (typeof conf === 'number' && conf >= threshold) {
+          applyReviewStatus(state, key, 'approved');
         }
       });
     },
     bulkRejectAll: (state) => {
       const keys = getFieldKeys(state.currentLog);
       keys.forEach((key) => {
-        state.fieldStatuses[key] = 'rejected';
+        applyReviewStatus(state, key, 'rejected');
       });
     },
     bulkRejectUnapproved: (state) => {
       const keys = getFieldKeys(state.currentLog);
       keys.forEach((key) => {
         if (state.fieldStatuses[key] !== 'approved') {
-          state.fieldStatuses[key] = 'rejected';
+          applyReviewStatus(state, key, 'rejected');
         }
       });
     },
     resetFieldStatuses: (state) => {
       const keys = getFieldKeys(state.currentLog);
       keys.forEach((key) => {
-        state.fieldStatuses[key] = 'pending';
+        applyReviewStatus(state, key, 'pending');
       });
     },
     setActiveFieldKey: (state, action: PayloadAction<string | null>) => {
@@ -177,6 +243,13 @@ const logSlice = createSlice({
       state.fieldStatuses = {};
       state.editedFieldValues = {};
       state.activeFieldKey = null;
+      state.savedLogReference = null;
+      state.savedAt = null;
+    },
+    /** Record a successful save (backend save_log tool execution). */
+    markLogSaved: (state, action: PayloadAction<string | null>) => {
+      state.savedLogReference = action.payload;
+      state.savedAt = action.payload ? new Date().toISOString() : null;
     },
     setExtractionStatus: (
       state,
@@ -205,6 +278,7 @@ export const {
   toggleShortcutsModal,
   clearUpdatedFields,
   clearLog,
+  markLogSaved,
   setExtractionStatus,
 } = logSlice.actions;
 

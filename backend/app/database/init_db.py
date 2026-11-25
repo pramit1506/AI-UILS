@@ -1,9 +1,13 @@
 from sqlalchemy import text
 from loguru import logger
 from app.database.session import async_engine, async_session_maker
+from app.database.search_v1 import install_search_v1
+from app.database.workspace_v2 import install_workspace_v2
+from app.database.identifier_prefixes import install_identifier_prefixes
 from app.models import Base
 from app.repositories.user_repository import user_repository
 from app.core.security import get_password_hash
+from app.core.config import settings
 
 
 DEMO_USERS = [
@@ -11,25 +15,25 @@ DEMO_USERS = [
     "name": "Dr. Jane Smith",
     "role": "Quality Assurance Lead",
     "username": "dr_smith",
-    "email": "jane.smith@pharma-qms.io",
+    "email": "jane.smith@example.com",
     "password": "password123",
-    "bio": "Lead Quality & Compliance Specialist with 10+ years QMS experience.",
+    "bio": "Sample account for guided product tours.",
   },
   {
     "name": "Alex Rivera",
     "role": "Compliance Officer",
     "username": "alex_rivera",
-    "email": "alex.rivera@audit-corp.com",
+    "email": "alex.rivera@example.com",
     "password": "password123",
-    "bio": "Regulatory Affairs & Pharmacovigilance Auditor.",
+    "bio": "Sample account showing role-based profile fields.",
   },
   {
     "name": "Sarah Connor",
     "role": "Operations Director",
     "username": "sarah_c",
-    "email": "sarah.c@manufacturing.org",
+    "email": "sarah.c@example.com",
     "password": "password123",
-    "bio": "Plant Operations & Batch Intake Director.",
+    "bio": "Sample account for multi-user tour scenarios.",
   },
 ]
 
@@ -85,9 +89,26 @@ async def init_database():
             except Exception as migration_exc:
                 logger.debug(f"Schema column check skipped or not applicable: {migration_exc}")
 
-        # Seed demo users
-        await seed_demo_users()
+            # Existing installations may have been bootstrapped without Alembic.
+            search_ready = await conn.scalar(text(
+                "SELECT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'log_record'::regclass "
+                "AND attname = 'search_terms' AND NOT attisdropped)"
+            ))
+            if not search_ready:
+                await conn.run_sync(install_search_v1)
+            if not await conn.scalar(text("SELECT to_regclass('ix_log_record_search_prefixes') IS NOT NULL")):
+                await conn.run_sync(install_workspace_v2, legacy_index=False)
+                await conn.run_sync(install_identifier_prefixes)
 
-        logger.info("Database initialized, migrated, and seeded successfully.")
+        # Seed demo users only in DEBUG mode — the accounts use a publicly
+        # known password in source code, so they must never exist in any
+        # deployed environment.
+        if settings.DEBUG:
+            await seed_demo_users()
+            logger.info("Database initialized, migrated, and seeded successfully (DEBUG mode: demo users enabled).")
+        else:
+            logger.info("Database initialized and migrated successfully (demo seeding skipped: DEBUG=False).")
     except Exception as exc:
-        logger.warning(f"Database initialization encountered an error: {exc}")
+        # Surface DB problems loudly instead of starting "successfully" in a
+        # broken state (readiness probes used to pass while every request 500'd).
+        logger.error(f"Database initialization FAILED: {exc}")

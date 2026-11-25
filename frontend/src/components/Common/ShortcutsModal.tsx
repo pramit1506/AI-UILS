@@ -39,13 +39,9 @@ export const ShortcutsModal: React.FC = () => {
       ],
     },
     {
-      title: 'View Modes & Global',
+      title: 'Workspace',
       icon: <Sparkles size={14} className="shortcuts-section-icon" />,
       shortcuts: [
-        { keys: ['1'], description: 'Side-by-Side View (Doc + Fields + Chat)' },
-        { keys: ['2'], description: 'Review Focus View (Doc + Fields only)' },
-        { keys: ['3'], description: 'Fields Only View' },
-        { keys: ['4'], description: 'Chat Focus View' },
         { keys: ['Ctrl / ⌘', 'Enter'], description: 'Save & Commit Log' },
         { keys: ['?'], description: 'Toggle this shortcuts cheatsheet' },
         { keys: ['Esc'], description: 'Close dialogs or cancel inline edit' },

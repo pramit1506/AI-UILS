@@ -11,7 +11,7 @@ import { DocumentViewer } from '../../src/components/DocumentViewer/DocumentView
 
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
-const renderWithRedux = (preloadedState?: any) => {
+const renderWithRedux = (preloadedState?: Partial<import("../../src/redux/store").RootState>) => {
   const store = configureStore({
     reducer: {
       log: logReducer,
@@ -34,7 +34,7 @@ const renderWithRedux = (preloadedState?: any) => {
 describe('DocumentViewer Component', () => {
   it('renders empty state initially and allows loading sample document', () => {
     const { store } = renderWithRedux();
-    expect(screen.getByText('Original Document Viewer')).toBeInTheDocument();
+    expect(screen.getByText('Sample documents')).toBeInTheDocument();
 
     const loadSampleBtn = screen.getByRole('button', { name: /invoice/i });
     fireEvent.click(loadSampleBtn);

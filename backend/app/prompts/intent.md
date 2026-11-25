@@ -5,6 +5,7 @@ The intent must be exactly one of the following:
 - "save_log": The user has provided a document, invoice, resume, contract, form, or any structured information they want to log — OR they are explicitly asking to save/log/record/store information. Also use this when the user pastes raw document text or says "please save this", "log this", "record this".
 - "edit_log": The user is asking to update, correct, or change a field in an existing log that has already been saved.
 - "search_logs": The user wants to find, look up, retrieve, or search for previously logged records.
+  For this intent, include a `search_query` containing the keywords, names or identifiers to find. Omit request phrasing such as "which of my documents mentions".
 - "summarize_log": The user wants a plain-language summary of the current log draft or a saved record.
 - "completeness_check": The user wants to know if any required fields are missing from the current draft.
 
@@ -17,5 +18,6 @@ The intent must be exactly one of the following:
 Respond strictly with a JSON object matching this schema:
 {
     "intent": "<intent>",
-    "confidence": 0.95
+    "confidence": 0.95,
+    "search_query": "<keywords when searching, otherwise null>"
 }

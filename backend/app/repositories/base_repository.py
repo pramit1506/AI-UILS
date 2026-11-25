@@ -40,17 +40,14 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         db_obj: ModelType,
         obj_in: Union[UpdateSchemaType, Dict[str, Any]]
     ) -> ModelType:
-        obj_data = {
-            c.name: getattr(db_obj, c.name) for c in self.model.__table__.columns
-        }
         if isinstance(obj_in, dict):
             update_data = obj_in
         else:
             update_data = obj_in.model_dump(exclude_unset=True)
             
-        for field in obj_data:
-            if field in update_data:
-                setattr(db_obj, field, update_data[field])
+        for field, value in update_data.items():
+            if field in self.model.__table__.columns:
+                setattr(db_obj, field, value)
                 
         db.add(db_obj)
         await db.commit()

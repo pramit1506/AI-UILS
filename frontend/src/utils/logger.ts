@@ -1,57 +1,85 @@
-const LOG_ENDPOINT = import.meta.env.VITE_API_URL 
-  ? `${import.meta.env.VITE_API_URL}/api/v1/system-logs`
-  : 'http://localhost:8000/api/v1/system-logs';
+// Uses the same base URL as the API client (relative "/api/v1" in dev behind the
+// Vite proxy, absolute in production). The previous implementation read a
+// nonexistent `VITE_API_URL` variable and fell back to a hardcoded
+// "http://localhost:8000", so client-side logging was silently broken outside
+// bare-metal dev setups.
+import { apiClient, getCsrfToken } from '../services/api';
 
-async function sendLog(level: string, message: string, stackTrace?: string, url?: string, additionalInfo?: any) {
+const MAX_LOG_CHARS = 4000;
+
+/**
+ * Safely serialise a value for logging — never throws (handles cyclic
+ * structures that JSON.stringify cannot handle, e.g. React state dumps).
+ */
+function safeStringify(value: unknown): string {
+  if (value === null || value === undefined) return String(value);
   try {
-    await fetch(LOG_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        level,
-        message,
-        source: 'frontend',
-        url: url || window.location.href,
-        stack_trace: stackTrace,
-        additional_info: additionalInfo,
-      }),
+    return JSON.stringify(value);
+  } catch {
+    try {
+      return String(value);
+    } catch {
+      return '[unserializable]';
+    }
+  }
+}
+
+function truncate(message: string): string {
+  return message.length > MAX_LOG_CHARS ? `${message.slice(0, MAX_LOG_CHARS)}…` : message;
+}
+
+async function sendLog(level: string, message: string, stackTrace?: string, url?: string, additionalInfo?: unknown) {
+  // `/system-logs` requires an authenticated session (JWT cookie + CSRF
+  // double-submit header). The previous raw `fetch` sent neither, so every
+  // transmitter call resolved to a guaranteed 403 — flooding the browser
+  // console with noise on each console.error/warn. apiClient attaches the
+  // CSRF header and cookie credentials like every other API call; when there
+  // is no CSRF cookie the visitor is anonymous, so remote logging is skipped
+  // entirely (local console logging still happens below the patch).
+  if (!getCsrfToken()) return;
+  try {
+    await apiClient.post('/system-logs', {
+      level,
+      message: truncate(message),
+      source: 'frontend',
+      url: url || window.location.href,
+      stack_trace: stackTrace ? truncate(stackTrace) : undefined,
+      additional_info: additionalInfo,
     });
   } catch (e) {
     // Silently fail if logging fails to prevent infinite loops
   }
 }
 
+let initialized = false;
+
 export function initLogger() {
-  if ((window as any)._loggerInitialized) return;
-  (window as any)._loggerInitialized = true;
+  if (initialized) return;
+  initialized = true;
 
   const originalError = console.error;
   const originalWarn = console.warn;
 
-  console.error = (...args: any[]) => {
+  const formatArgs = (args: unknown[]) =>
+    truncate(args.map(a => {
+      if (a instanceof Error) return `${a.message}\n${a.stack}`;
+      return typeof a === 'object' ? safeStringify(a) : String(a);
+    }).join(' '));
+
+  console.error = (...args: unknown[]) => {
     originalError(...args);
-    const message = args.map(a => {
-        if (a instanceof Error) return `${a.message}\n${a.stack}`;
-        return typeof a === 'object' ? JSON.stringify(a) : String(a);
-    }).join(' ');
-    sendLog('ERROR', message);
+    sendLog('ERROR', formatArgs(args));
   };
 
-  console.warn = (...args: any[]) => {
+  console.warn = (...args: unknown[]) => {
     originalWarn(...args);
-    const message = args.map(a => {
-        if (a instanceof Error) return `${a.message}\n${a.stack}`;
-        return typeof a === 'object' ? JSON.stringify(a) : String(a);
-    }).join(' ');
-    sendLog('WARN', message);
+    sendLog('WARN', formatArgs(args));
   };
 
   window.onerror = (message, source, lineno, colno, error) => {
     sendLog(
       'ERROR',
-      typeof message === 'string' ? message : JSON.stringify(message),
+      truncate(typeof message === 'string' ? message : safeStringify(message)),
       error?.stack,
       source,
       { lineno, colno }
@@ -63,7 +91,7 @@ export function initLogger() {
     const reason = event.reason;
     let message = 'Unhandled Promise Rejection';
     let stack = '';
-    
+
     if (reason instanceof Error) {
         message = reason.message;
         stack = reason.stack || '';
@@ -73,10 +101,10 @@ export function initLogger() {
 
     sendLog(
       'ERROR',
-      message,
-      stack,
+      truncate(message),
+      truncate(stack),
       window.location.href,
-      { reason: String(reason) }
+      { reason: safeStringify(reason) }
     );
   });
 }

@@ -20,6 +20,12 @@ from app.shared.enums import AgentAction
 from app.core.config import settings
 from loguru import logger
 
+SEARCH_COMMAND = re.compile(
+    r"^\s*(?:(?:can|could) you\s+)?(?:please\s+)?(?:search|find|look up|retrieve|recall)\b"
+    r"(?:\s+(?:(?:my|the|all)\s+)?(?:saved\s+)?(?:logs?|documents?|records?)\b)?"
+    r"(?:\s+(?:for|containing|mentioning|matching)\b)?[\s:]*",
+    re.IGNORECASE,
+)
 
 async def input_node(state: GraphState) -> Dict[str, Any]:
     logger.info(f"[{state.get('request_id')}] Input Node: Received message for conversation {state.get('conversation_id')}")
@@ -27,13 +33,18 @@ async def input_node(state: GraphState) -> Dict[str, Any]:
         await conversation_memory_service.append_message(
             state["conversation_id"],
             "user",
-            state["user_message"]
+            state["user_message"],
+            allow_compression=state.get("action") != "save_reviewed" and SEARCH_COMMAND.match(state["user_message"]) is None,
         )
 
+    metadata = state.get("metadata", {}).copy()
+    for key in ("all_providers_exhausted", "llm_unavailable", "extraction_error"):
+        metadata.pop(key, None)
     return {
         "tool_result": None,
         "tool_status": None,
         "validation_errors": None,
+        "metadata": metadata,
     }
 
 
@@ -41,6 +52,26 @@ async def intent_node(state: GraphState) -> Dict[str, Any]:
     logger.info(f"[{state.get('request_id')}] Intent Node: Detecting intent")
 
     from app.shared.enums import ClarificationLifecycle
+
+    message = state.get("user_message", "")
+    if state.get("action") == "capture":
+        return {"detected_intent": "capture", "log_draft": DynamicLogDraft(),
+                "selected_tool": None, "pending_tool": None, "clarification_state": None}
+    if state.get("action") == "save_reviewed":
+        from app.schemas.decision import DecisionOutput
+        from app.shared.enums import AgentState, ToolName, ToolReadiness
+
+        draft = state["log_draft"]
+        return {
+            "detected_intent": "save_reviewed", "selected_tool": ToolName.SAVE_LOG,
+            "log_draft": draft.model_copy(update={"schema_name": draft.schema_name or "Document"}),
+            "tool_arguments": {}, "pending_tool": None, "clarification_state": None,
+            "decision_output": DecisionOutput(action=AgentAction.EXECUTE_TOOL, selected_tool=ToolName.SAVE_LOG,
+                tool_readiness=ToolReadiness.READY, decision_confidence=1.0, next_state=AgentState.READY_TO_EXECUTE),
+        }
+    command = SEARCH_COMMAND.match(message)
+    if command:
+        return _search_turn(message[command.end():].strip())
 
     clarification = state.get("clarification_state")
     if clarification and clarification.status in [
@@ -66,7 +97,7 @@ async def intent_node(state: GraphState) -> Dict[str, Any]:
     if settings.DEMO_OFFLINE_MODE:
         metadata = state.get("metadata", {}).copy()
         metadata["llm_unavailable"] = True
-        return {"detected_intent": _fallback_intent(state.get("user_message", "")), "metadata": metadata}
+        return _fallback_intent_update(message, metadata)
 
     llm = get_llm_provider()
     system_prompt = load_prompt("system.md")
@@ -80,10 +111,16 @@ async def intent_node(state: GraphState) -> Dict[str, Any]:
     ]
 
     try:
-        intent_output = await llm.generate_structured(messages=messages, schema=IntentOutput)
+        intent_output = await llm.generate_structured(
+            messages=messages,
+            schema=IntentOutput,
+            model="fast-router" if settings.LLM_PROVIDER.lower().strip() == "multi" else None,
+        )
         logger.info(f"[{state.get('request_id')}] Intent detected: {intent_output.intent}")
         metadata = state.get("metadata", {}).copy()
         metadata["intent_confidence"] = intent_output.confidence
+        if intent_output.intent == "search_logs":
+            return {**_search_turn(intent_output.search_query or message), "metadata": metadata}
         return {"detected_intent": intent_output.intent, "metadata": metadata}
     except AllProvidersExhaustedException as e:
         logger.critical(f"[{state.get('request_id')}] Intent Node: ALL providers exhausted — {e}")
@@ -92,26 +129,43 @@ async def intent_node(state: GraphState) -> Dict[str, Any]:
         return {
             "detected_intent": "conversation",
             "metadata": metadata,
-            "llm_response": (
-                "⚠️ All configured AI provider API keys have been exhausted "
-                "(rate-limited or invalid). The system automatically tried every "
-                "key across Groq, Cerebras, Gemini, and OpenRouter. "
-                "Please add new API keys to your .env file "
-                "(GROQ_API_KEY_1, CEREBRAS_API_KEY_1, GEMINI_API_KEY_1, "
-                "OPENROUTER_API_KEY_1) and restart the server."
-            ),
+            "llm_response": "The document assistant is temporarily unavailable. Please try again later.",
         }
     except (RateLimitException, InvalidAPIKeyException) as e:
         logger.error(f"[{state.get('request_id')}] API Limit/Key Error in Intent Node: {e}")
         metadata = state.get("metadata", {}).copy()
         metadata["llm_unavailable"] = True
-        return {"detected_intent": _fallback_intent(state.get("user_message", "")), "metadata": metadata}
+        return _fallback_intent_update(message, metadata)
     except Exception as e:
         logger.error(f"[{state.get('request_id')}] Intent Node Error: {e}")
         metadata = state.get("metadata", {}).copy()
         metadata["llm_unavailable"] = True
-        return {"detected_intent": _fallback_intent(state.get("user_message", "")), "metadata": metadata}
+        return _fallback_intent_update(message, metadata)
 
+
+
+def _search_turn(query: str) -> dict:
+    """Search is a read-only command independent of any document being drafted."""
+    from app.schemas.decision import DecisionOutput
+    from app.shared.enums import AgentState, ToolName, ToolReadiness
+
+    return {
+        "detected_intent": "search_logs",
+        "selected_tool": ToolName.SEARCH_LOGS,
+        "tool_arguments": {"query": query},
+        "decision_output": DecisionOutput(
+            action=AgentAction.EXECUTE_TOOL, selected_tool=ToolName.SEARCH_LOGS,
+            tool_readiness=ToolReadiness.READY, decision_confidence=1.0,
+            next_state=AgentState.READY_TO_EXECUTE,
+        ),
+    }
+
+
+def _fallback_intent_update(message: str, metadata: dict) -> dict:
+    intent = _fallback_intent(message)
+    if intent == "search_logs":
+        return {**_search_turn(message), "metadata": metadata}
+    return {"detected_intent": intent, "metadata": metadata}
 
 
 def _fallback_intent(message: str) -> str:
@@ -260,6 +314,12 @@ def _fallback_extract_fields(
     """
     Domain-agnostic offline extraction engine.
 
+    Generic, deterministic parsing only — NO domain keyword tables. The document
+    type (schema_name) is intentionally NOT inferred here: the LLM-driven
+    extraction stage infers it from the draft schema, and when it cannot be
+    determined the field stays empty and the pipeline relies on the standard
+    clarification flow (decision_output.action == CLARIFY) instead of guessing.
+
     Returns (extracted_fields, corrections):
     - extracted_fields: new data to MERGE into the draft
     - corrections: values the user is CORRECTING (override existing fields)
@@ -270,38 +330,7 @@ def _fallback_extract_fields(
     corrections: Dict[str, Any] = {}
     is_correction = _is_correction_message(text)
 
-    # ── 1. Schema / domain detection (order matters — Invoice before Receipt) ──
-    schema_name: str | None = None
-    domain: str | None = None
-    existing_schema = existing_draft.schema_name if existing_draft else None
-
-    if not existing_schema or existing_schema == "General Document":
-        if any(t in lowered for t in ["invoice", "bill", "vendor", "billed", "invoiced"]):
-            schema_name = "Invoice"
-            domain = "Finance"
-        elif any(t in lowered for t in ["incident report", "product complaint", "defect report", "malfunction report", "adverse event", "complaint id", "complaint report", "quality assurance"]):
-            schema_name = "Complaint"
-            domain = "Quality Management"
-        elif any(t in lowered for t in ["patient", "diagnosis", "prescription", "clinical intake", "medical record", "doctor", "physician"]):
-            schema_name = "Medical Record"
-            domain = "Healthcare"
-        elif any(t in lowered for t in ["resume", "curriculum vitae", "work experience", "candidate profile"]):
-            schema_name = "Resume"
-            domain = "HR"
-        elif any(t in lowered for t in ["contract", "agreement", "parties", "clause", "whereas"]):
-            schema_name = "Contract"
-            domain = "Legal"
-        elif any(t in lowered for t in ["receipt", "subtotal", "purchase", "grocery"]):
-            schema_name = "Receipt"
-            domain = "Finance"
-        elif any(t in lowered for t in ["complaint", "issue", "problem", "defect"]):
-            schema_name = "Complaint"
-            domain = "Quality Management"
-        else:
-            schema_name = "General Document"
-            domain = "General"
-
-    # ── 2. Source detection ──────────────────────────────────────────────────
+    # ── 1. Source detection ──────────────────────────────────────────────────
     if "uploaded document" in lowered or ".pdf" in lowered:
         fields["_source"] = "pdf"
     elif "email" in lowered or ".eml" in lowered:
@@ -309,9 +338,9 @@ def _fallback_extract_fields(
     else:
         fields["_source"] = "text"
 
-    # ── 3. Structured KV extraction (handles "Key: Value" documents) ─────────
+    # ── 2. Structured KV extraction (handles "Key: Value" documents) ─────────
     kv_pattern = re.compile(
-        r"^[ \t]*([A-Za-z][A-Za-z0-9 \t_\-\.\(\)/]{1,35}?)\s*:\s*([^\n\r]{1,200})$",
+        r"^[ \t]*([A-Za-z][A-Za-z0-9 \t_\-\.\(\)/]{1,35}?)[ \t]*:[ \t]*([^\n\r]{1,200})$",
         re.MULTILINE,
     )
     for match in kv_pattern.finditer(text):
@@ -346,129 +375,28 @@ def _fallback_extract_fields(
             else:
                 fields[key] = value_raw
 
-    # ── 4. Named-entity extraction for conversational / messy text ───────────
-    # Invoice number — match structured patterns like #INV-2026-8809, AMG-8841-X, NSS-9021
-    # First: explicit # prefix ("INVOICE #INV-2026-8809")
-    inv_match = re.search(
-        r"(?:INVOICE\s+#|invoice\s+#|#)([A-Z0-9][A-Z0-9\-]{2,20})",
-        text, re.IGNORECASE,
-    )
-    if not inv_match:
-        # Second: "invoice reference number is AMG-8841-X", "invoice number is NSS-9021"
-        # Each word is optional except 'number/no/#' which anchors the pattern
-        inv_match = re.search(
-            r"(?:invoice\s+)?(?:ref(?:erence)?\s+)?(?:number|no\.?|#)\s*(?:is\s+)?([A-Z][A-Z0-9\-]{2,20})",
-            text, re.IGNORECASE,
-        )
-    if inv_match:
-        val = inv_match.group(1).strip()
-        # Sanity-check: must look like a real code (has digit or dash, not a plain word)
-        if not re.search(r"[\d\-]", val):
-            inv_match = None
-    if inv_match:
-        val = inv_match.group(1).strip()
-        # Don't overwrite a clean value already found by KV extraction
-        dest = corrections if is_correction else fields
-        if "invoice_number" not in dest:
-            dest["invoice_number"] = val
-
-    # Vendor / company name
-    vendor_match = re.search(
-        r"(?:from|by|vendor(?:'s)?(?:\s+name)?(?:\s+is|\s+was)?|company|billed by|paid (?:to|the bill for))\s+([A-Z][A-Za-z0-9\s&\.,']{2,50}?)(?:\s*[,.]|\s+for|\s+the|\s+was|\s+has|$)",
-        text, re.IGNORECASE,
-    )
-    if vendor_match and "vendor" not in fields and "vendor" not in corrections:
-        vendor_name = vendor_match.group(1).strip().rstrip(",.")
-        stop_words = {"the", "a", "an", "this", "our", "your", "my", "us", "it"}
-        if vendor_name.lower() not in stop_words and len(vendor_name) > 2:
-            (corrections if is_correction else fields)["vendor"] = vendor_name
-
-    # Header-based vendor/company detection (e.g. "ACME INDUSTRIAL SUPPLY CORP" at the top of a document)
-    if "vendor" not in fields and "vendor" not in corrections:
-        for line in text.splitlines()[:5]:
-            line_str = line.strip()
-            if not line_str or len(line_str) < 3 or len(line_str) > 70:
-                continue
-            if any(w in line_str.lower() for w in ("process this", "uploaded document", "invoice", "receipt", "medical", "resume", "billed to", "patient", "phone:", "email:")):
-                continue
-            if re.search(r"\b(corp|corporation|inc|incorporated|llc|ltd|co|company|technologies|solutions|supply|group|logistics|health|hospital|clinic|associates)\b", line_str, re.IGNORECASE) or (line_str.isupper() and len(line_str.split()) >= 2):
-                (corrections if is_correction else fields)["vendor"] = line_str
-                break
-
-    # Customer / Billed To extraction
-    cust_match = re.search(
-        r"(?:billed\s+to|sold\s+to|customer(?:\s+name)?|client(?:\s+name)?)\s*:\s*\n?\s*([A-Za-z0-9\s&\.,'\-]{2,50}?)(?:\n|\r|$)",
-        text, re.IGNORECASE,
-    )
-    if cust_match and "customer_name" not in fields and "customer_name" not in corrections:
-        c_name = cust_match.group(1).strip().rstrip(",;")
-        if c_name.lower() not in ("attn", "accounts payable", "the", "a"):
-            (corrections if is_correction else fields)["customer_name"] = c_name
-
-    # Medical record patterns
-    if schema_name == "Medical Record" or "patient" in lowered:
-        pat_match = re.search(r"(?:patient(?:\s+name)?|patient\s*#|patient\s*id)\s*:\s*([A-Za-z0-9\s\.\-]{2,50}?)(?=\n|\r|$)", text, re.IGNORECASE)
-        if pat_match and "patient_name" not in fields and "patient_name" not in corrections:
-            fields["patient_name"] = pat_match.group(1).strip()
-
-        doc_match = re.search(r"(?:doctor(?:\s+name)?|physician|attending(?:\s+physician)?|dr\.)\s*:\s*([A-Za-z0-9\s\.\-]{2,50}?)(?=\n|\r|$)", text, re.IGNORECASE)
-        if doc_match and "doctor_name" not in fields and "doctor_name" not in corrections:
-            fields["doctor_name"] = doc_match.group(1).strip()
-
-        diag_match = re.search(r"(?:diagnosis|condition|assessment|chief\s+complaint)\s*:\s*([A-Za-z0-9\s\.,\-\(\)]{2,80}?)(?=\n|\r|$)", text, re.IGNORECASE)
-        if diag_match and "diagnosis" not in fields and "diagnosis" not in corrections:
-            fields["diagnosis"] = diag_match.group(1).strip()
-
-    # Resume patterns
-    if schema_name == "Resume" or "curriculum vitae" in lowered:
-        cand_match = re.search(r"(?:candidate(?:\s+name)?|name|applicant)\s*:\s*([A-Za-z\s\.\-]{2,50}?)(?=\n|\r|$)", text, re.IGNORECASE)
-        if cand_match and "candidate_name" not in fields and "candidate_name" not in corrections:
-            fields["candidate_name"] = cand_match.group(1).strip()
-
-    # Complaint patterns
-    if schema_name == "Complaint" or "complaint" in lowered:
-        prod_match = re.search(r"(?:product(?:\s+name)?|item(?:\s+name)?|device(?:\s+name)?)\s*:\s*([A-Za-z0-9\s\.\-]{2,50}?)(?=\n|\r|$)", text, re.IGNORECASE)
-        if prod_match and "product_name" not in fields and "product_name" not in corrections:
-            fields["product_name"] = prod_match.group(1).strip()
-
-        batch_match = re.search(r"(?:batch(?:\s+number|\s+no\.?)?|lot(?:\s+number|\s+no\.?)?)\s*:\s*([A-Za-z0-9\-_]{2,30}?)(?=\n|\r|$)", text, re.IGNORECASE)
-        if batch_match and "batch_number" not in fields and "batch_number" not in corrections:
-            fields["batch_number"] = batch_match.group(1).strip()
-
-    # Total amount extraction
-    # Check if total was already extracted by KV
+    # ── 3. Generic amount extraction (common total/amount labels, bare "$") ──
+    # If a total-ish key was captured by KV extraction, expose the canonical
+    # "total_amount" alias; otherwise look for an explicit total line.
     kv_total = fields.get("total_amount_due") or fields.get("total_due") or fields.get("total_amount") or fields.get("total")
     if kv_total and "total_amount" not in fields:
         fields["total_amount"] = _normalize_amount(str(kv_total))
 
     dest_key = corrections if is_correction else fields
     if "total_amount" not in fields and "total_amount" not in corrections:
-        if is_correction:
-            corr_amount = re.search(
-                r"(?:actually|was|is now|should be)\s+\$?\s*([\d,]+(?:\.\d{1,2})?)",
-                text, re.IGNORECASE,
-            )
-            if corr_amount:
-                dest_key["total_amount"] = _normalize_amount(f"${corr_amount.group(1)}")
-            else:
-                any_amount = re.search(r"\$\s*([\d,]+(?:\.\d{1,2})?)", text)
-                if any_amount:
-                    dest_key["total_amount"] = _normalize_amount(f"${any_amount.group(1)}")
-        else:
-            # Explicit total patterns
-            total_m = re.search(
-                r"(?:total(?:\s+(?:invoice\s+)?amount(?:\s+due)?)?|total\s+due|grand\s+total|amount\s+due)\s*[:\s]?\s*\$?\s*([\d,]+(?:\.\d{1,2})?)",
-                text, re.IGNORECASE,
-            )
-            if total_m:
-                dest_key["total_amount"] = _normalize_amount(f"${total_m.group(1)}")
+        total_m = re.search(
+            r"(?:total(?:\s+amount(?:\s+due)?)?|amount\s+due)\s*[:\s]?\s*\$?\s*([\d,]+(?:\.\d{1,2})?)",
+            text, re.IGNORECASE,
+        )
+        if total_m:
+            dest_key["total_amount"] = _normalize_amount(f"${total_m.group(1)}")
 
-    # Dates: grab all date-like strings and map to the right field names
+    # ── 4. Generic date extraction ("due by ...", "received on ...", "dated ...") ──
     date_contexts = [
         (r"(?:due\s+(?:date|by|on))\s*[:\s]?\s*(.{5,25})", "due_date"),
-        (r"(?:received|receipt)\s+(?:date|on)\s*[:\s]?\s*(.{5,25})", "received_date"),
-        (r"(?:dated?|billed?(?:\s+back)?(?:\s+on)?)\s+(?:on\s+)?(.{5,25})", "invoice_date"),
-        (r"(?:date|Date)\s*:\s*(.{5,25})", "invoice_date"),
+        (r"(?:received|issued?)\s+(?:date|on)\s*[:\s]?\s*(.{5,25})", "received_date"),
+        (r"(?:dated?)\s+(?:on\s+)?(.{5,25})", "date"),
+        (r"(?:^|\n)\s*Date\s*:\s*(.{5,25})", "date"),
     ]
     for pattern, field_name in date_contexts:
         if field_name in fields or field_name in corrections:
@@ -480,53 +408,12 @@ def _fallback_extract_fields(
             if parsed:
                 (corrections if is_correction else fields)[field_name] = parsed
 
-    # Payment terms: "Net 30", "Net 45", "within 15 days"
-    pay_match = re.search(
-        r"(?:payment\s+terms?\s*[:\s]?|within\s+)(net\s*\d+|\d+\s*days?)",
-        text, re.IGNORECASE,
-    )
-    if pay_match:
-        pay_val = pay_match.group(1).strip()
-        (corrections if is_correction else fields)["payment_terms"] = pay_val
-
-    # Category / description / budget
-    cat_match = re.search(
-        r"(?:category|budget|department|under(?:\s+the)?)\s*[:\s]?([A-Za-z][\w\s&,]{3,60}?)(?=\.|,|$|\n)",
-        text, re.IGNORECASE,
-    )
-    if cat_match:
-        cat_val = cat_match.group(1).strip().rstrip(",.")
-        (corrections if is_correction else fields)["category"] = cat_val
-
-    # Description / purpose
-    desc_match = re.search(
-        r"(?:for(?:\s+the)?|description\s*:|regarding)\s+([A-Za-z][\w\s&,\-\.]{5,100}?)(?=\.|,|$|\n)",
-        text, re.IGNORECASE,
-    )
-    if desc_match and "description" not in fields and "description" not in corrections:
-        desc_val = desc_match.group(1).strip().rstrip(",.")
-        vendor_val = fields.get("vendor") or corrections.get("vendor") or ""
-        if desc_val.lower() not in vendor_val.lower():
-            (corrections if is_correction else fields)["description"] = desc_val
-
-    # Alias normalization
+    # ── 5. Alias normalization (common label variants only) ──────────────────
     if "total_amount_due" in fields and "total_amount" not in fields:
         fields["total_amount"] = fields["total_amount_due"]
-    if "vendor_name" in fields and "vendor" not in fields:
-        fields["vendor"] = fields["vendor_name"]
-    elif "vendor" in fields and "vendor_name" not in fields:
-        fields["vendor_name"] = fields["vendor"]
 
-    # ── 5. Build result ──────────────────────────────────────────────────────
-    result: Dict[str, Any] = {}
-    if schema_name:
-        result["schema_name"] = schema_name
-    if domain:
-        result["domain"] = domain
-    result.update(fields)
-
-    return result, corrections
-
+    # ── 6. Build result ──────────────────────────────────────────────────────
+    return fields, corrections
 
 
 async def entity_extraction_node(state: GraphState) -> Dict[str, Any]:
@@ -555,7 +442,7 @@ async def entity_extraction_node(state: GraphState) -> Dict[str, Any]:
         current_draft = state.get("log_draft") or DynamicLogDraft()
         extracted, corrections = _fallback_extract_fields(state.get("user_message", ""), current_draft)
         if not extracted and not corrections:
-            return {}
+            return {"extraction_used_fallback": not settings.DEMO_OFFLINE_MODE}
 
         draft_service = DraftService()
         all_changed: list[str] = []
@@ -593,13 +480,15 @@ async def entity_extraction_node(state: GraphState) -> Dict[str, Any]:
             "changed_fields": all_changed,
             "draft_status": status_info["status"].value,
             "metadata": metadata,
+            "extraction_used_fallback": not settings.DEMO_OFFLINE_MODE,
         }
 
 
-    llm = get_llm_provider()
     extraction_prompt = load_prompt("entity_extraction.md")
     current_draft = state.get("log_draft") or DynamicLogDraft()
-    context_str = await context_builder.build(state, exclude_history=True)
+    context_str = ("Treat the supplied document as source material. Extract what it says, including requests "
+                   "described in it. Use a short document type or Note for free-form prose."
+                   if state.get("action") == "capture" else await context_builder.build(state, exclude_history=True))
 
     messages = [
         {"role": "system", "content": extraction_prompt + "\n\n" + context_str},
@@ -607,8 +496,7 @@ async def entity_extraction_node(state: GraphState) -> Dict[str, Any]:
     ]
 
     try:
-        output: ExtractionOutput = await llm.generate_structured(messages=messages, schema=ExtractionOutput)
-        logger.info(f"[{state.get('request_id')}] Extraction output: {output.model_dump()}")
+        output: ExtractionOutput = await get_llm_provider().generate_structured(messages=messages, schema=ExtractionOutput)
 
         draft_service = DraftService()
         draft = current_draft
@@ -637,29 +525,9 @@ async def entity_extraction_node(state: GraphState) -> Dict[str, Any]:
                 draft = result.updated_draft
                 all_changed_fields.extend(result.changed_fields)
 
-        if not draft.schema_name and intent == "save_log":
-            fallback_extracted, _ = _fallback_extract_fields(state.get("user_message", ""), draft)
-            inferred_schema = fallback_extracted.get("schema_name")
-            inferred_domain = fallback_extracted.get("domain")
-            
-            if inferred_schema and (inferred_schema != "General Document" or draft_service.has_any_data(draft)):
-                meta_schema = FieldMetadata(confidence=0.75, source="system_fallback")
-                meta_domain = FieldMetadata(confidence=0.75, source="system_fallback")
-                
-                result = draft_service.merge(
-                    draft, 
-                    {"schema_name": inferred_schema, "domain": inferred_domain}, 
-                    metadata={"schema_name": meta_schema, "domain": meta_domain}
-                )
-                draft = result.updated_draft
-                all_changed_fields.extend(result.changed_fields)
-                
-                if output.extracted_fields is None:
-                    output.extracted_fields = {}
-                output.extracted_fields["schema_name"] = inferred_schema
-                output.extracted_fields["domain"] = inferred_domain
-                output.field_metadata["schema_name"] = meta_schema.model_dump()
-                output.field_metadata["domain"] = meta_domain.model_dump()
+        # Domain-agnostic: the type of document (schema_name) is not guessed
+        # here. When the LLM extraction stage cannot infer it, the field stays
+        # empty and the standard clarification flow asks the user for it.
 
         all_changed_fields = list(set(all_changed_fields))
         status_info = draft_service.validate(draft)
@@ -676,83 +544,71 @@ async def entity_extraction_node(state: GraphState) -> Dict[str, Any]:
             "metadata": metadata,
         }
 
-    except AllProvidersExhaustedException as e:
-        logger.critical(f"[{state.get('request_id')}] Entity Extraction Node: ALL providers exhausted — {e}")
+    except Exception as exc:
+        logger.warning(f"[{state.get('request_id')}] Using local extraction after {type(exc).__name__}")
         metadata = state.get("metadata", {}).copy()
-        metadata["all_providers_exhausted"] = True
-        # Still attempt deterministic extraction so partial data is preserved
+        metadata["extraction_error"] = type(exc).__name__
+        if isinstance(exc, AllProvidersExhaustedException):
+            metadata["all_providers_exhausted"] = True
         extracted, corrections = _fallback_extract_fields(state.get("user_message", ""), current_draft)
         if not extracted and not corrections:
-            return {"metadata": metadata}
-        draft_service = DraftService()
-        all_changed: list[str] = []
-        if extracted:
-            md = {f: FieldMetadata(confidence=0.55, source="deterministic_fallback") for f in extracted if not f.startswith("_")}
-            result = draft_service.merge(current_draft, extracted, metadata=md)
-            current_draft = result.updated_draft
-            all_changed.extend(result.changed_fields)
-        if corrections:
-            for field, new_value in corrections.items():
-                result = draft_service.correct_field(current_draft, field, new_value, metadata=FieldMetadata(confidence=0.65, source="fallback_correction"))
-                current_draft = result.updated_draft
-                all_changed.extend(result.changed_fields)
-        status_info = draft_service.validate(current_draft)
-        return {
-            "log_draft": current_draft,
-            "changed_fields": list(set(all_changed)),
-            "draft_status": status_info["status"].value,
-            "metadata": metadata,
-        }
-    except (RateLimitException, InvalidAPIKeyException) as e:
-        logger.error(f"[{state.get('request_id')}] API Limit/Key Error in Entity Extraction Node: {e}")
-
-    except Exception as e:
-        logger.error(f"[{state.get('request_id')}] Entity Extraction Error: {e}")
-        extracted, corrections = _fallback_extract_fields(
-            state.get("user_message", ""),
-            current_draft,
-        )
-        if not extracted and not corrections:
-            return {}
+            return {"metadata": metadata, "extraction_used_fallback": True}
 
         draft_service = DraftService()
-        all_changed = []
-        
-        if extracted:
-            metadata_dict = {
-                field: FieldMetadata(confidence=0.55, source="deterministic_fallback")
-                for field in extracted
-                if not field.startswith("_")
-            }
-            result = draft_service.merge(current_draft, extracted, metadata=metadata_dict)
-            current_draft = result.updated_draft
-            all_changed.extend(result.changed_fields)
-            
-        if corrections:
-            for field, new_value in corrections.items():
-                meta = FieldMetadata(confidence=0.65, source="fallback_correction")
-                result = draft_service.correct_field(current_draft, field, new_value, metadata=meta)
-                current_draft = result.updated_draft
-                all_changed.extend(result.changed_fields)
-                
-        all_changed = list(set(all_changed))
-        status_info = draft_service.validate(current_draft)
-        metadata = state.get("metadata", {}).copy()
-        metadata["latest_extracted_fields"] = extracted
-        metadata["latest_field_metadata"] = {
-            field: FieldMetadata(confidence=0.55, source="deterministic_fallback").model_dump()
+        field_metadata = {
+            field: FieldMetadata(confidence=0.55, source="deterministic_fallback")
             for field in extracted if not field.startswith("_")
         }
+        changed_fields = set()
+        if extracted:
+            result = draft_service.merge(current_draft, extracted, metadata=field_metadata)
+            current_draft = result.updated_draft
+            changed_fields.update(result.changed_fields)
+        for field, new_value in corrections.items():
+            result = draft_service.correct_field(
+                current_draft, field, new_value,
+                metadata=FieldMetadata(confidence=0.65, source="fallback_correction"),
+            )
+            current_draft = result.updated_draft
+            changed_fields.update(result.changed_fields)
+
+        metadata["latest_extracted_fields"] = extracted
+        metadata["latest_field_metadata"] = {field: value.model_dump() for field, value in field_metadata.items()}
         return {
             "log_draft": current_draft,
-            "changed_fields": all_changed,
-            "draft_status": status_info["status"].value,
+            "changed_fields": sorted(changed_fields),
+            "draft_status": draft_service.validate(current_draft)["status"].value,
             "metadata": metadata,
+            "extraction_used_fallback": True,
         }
 
 
 async def decision_node(state: GraphState) -> Dict[str, Any]:
     logger.info(f"[{state.get('request_id')}] Decision Node: Planning next step")
+    if state.get("action") == "capture":
+        from app.shared.enums import ConversationStatus, DraftStatus
+
+        draft = state.get("log_draft") or DynamicLogDraft()
+        text = re.sub(r"^Process this uploaded document \([^\n]*\):\n\n", "", state["user_message"]).strip()
+        lines = text.splitlines()
+        title = lines[0].strip("# ").strip() if lines else ""
+        has_heading = len(lines) > 1 and 0 < len(title) <= 64 and ":" not in title
+        requests = []
+        if not draft.schema_name or not any(not key.startswith("_") for key in draft.fields):
+            for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
+                if re.search(r"^(?:please\s+)?(?:add|fix|improve|enable|update|allow)\b|\b(?:must|should)\b", sentence, re.I):
+                    requests.append(sentence.strip())
+        if not draft.schema_name:
+            name = title if has_heading else "Change request" if requests else "Document note"
+            draft = draft.model_copy(update={"schema_name": name})
+        changes = list(state.get("changed_fields") or [])
+        if text and not any(not k.startswith("_") for k in draft.fields):
+            fields = {"requested_changes": requests} if requests else {"text": text}
+            draft = draft.model_copy(update={"fields": fields})
+            changes.extend(fields)
+        return {"log_draft": draft, "changed_fields": changes, "draft_status": DraftStatus.PARTIAL.value,
+                "decision_output": None, "clarification_state": None,
+                "conversation_status": ConversationStatus.COLLECTING_INFORMATION}
 
     try:
         decision_output = await decision_service.determine_next_action(state)
@@ -829,13 +685,19 @@ async def decision_node(state: GraphState) -> Dict[str, Any]:
                 f"Pruned satisfied fields from missing list. "
                 f"Before={decision_output.required_missing_fields}, After={pruned_missing}"
             )
-            decision_output.required_missing_fields = pruned_missing
-            # If all required fields are now satisfied, upgrade CLARIFY → EXECUTE_TOOL
-            if not pruned_missing and decision_output.action == AgentAction.CLARIFY:
+            # DecisionOutput is a frozen Pydantic model — in-place attribute
+            # assignment raises ValidationError. Rebuild via model_copy(update=…).
+            upgraded = not pruned_missing and decision_output.action == AgentAction.CLARIFY and decision_output.selected_tool is not None
+            updates_dict: dict = {"required_missing_fields": pruned_missing}
+            if upgraded:
                 from app.shared.enums import ToolReadiness as TR, AgentState
-                decision_output.action = AgentAction.EXECUTE_TOOL
-                decision_output.tool_readiness = TR.READY
-                decision_output.next_state = AgentState.READY_TO_EXECUTE
+                updates_dict.update({
+                    "action": AgentAction.EXECUTE_TOOL,
+                    "tool_readiness": TR.READY,
+                    "next_state": AgentState.READY_TO_EXECUTE,
+                })
+            decision_output = decision_output.model_copy(update=updates_dict)
+            if upgraded:
                 logger.info(
                     f"[{state.get('request_id')}] Decision Node (BUG-001 fix): "
                     f"Upgraded action from CLARIFY → EXECUTE_TOOL (all required fields satisfied)."
@@ -921,17 +783,21 @@ async def decision_node(state: GraphState) -> Dict[str, Any]:
 async def tool_selection_node(state: GraphState) -> Dict[str, Any]:
     logger.info(f"[{state.get('request_id')}] Tool Selection Node: Selecting tool")
 
-    tool_name = state.get("selected_tool")
     intent = state.get("detected_intent")
 
-    if tool_name:
-        tool = tool_registry.get_tool(tool_name)
-    else:
-        tool = tool_registry.get_tool(intent)
+    # Registry validation: resolve the pending selection first, then fall back
+    # to the pending tool / intent. An unresolvable (stale or invalid)
+    # selection is cleared so the router sends the turn to response_node.
+    pending_name = state.get("selected_tool") or state.get("pending_tool") or intent
+    tool = tool_registry.get_tool(pending_name)
 
     if not tool:
-        logger.warning(f"[{state.get('request_id')}] No tool found for intent {intent}")
-        return {}
+        logger.warning(f"[{state.get('request_id')}] Tool Selection Node: no valid tool for '{pending_name}' — clearing stale selection")
+        return {
+            "selected_tool": None,
+            "pending_tool": None,
+            "tool_arguments": None,
+        }
 
     decision = state.get("decision_output")
     from app.shared.enums import AgentAction
@@ -986,11 +852,28 @@ async def tool_selection_node(state: GraphState) -> Dict[str, Any]:
 
     try:
         output = await llm.generate_structured(messages=messages, schema=ToolSelectionOutput)
-        logger.info(f"[{state.get('request_id')}] Selected tool: {tool.name}")
-        return {
-            "selected_tool": tool.name,
+
+        # The tool-selection LLM's choice must be honored: if it names a
+        # DIFFERENT, registry-validated tool than the pending selection, that
+        # later selection wins for execution (tool_execution_node reads
+        # `selected_tool`), and the stale pending_tool is cleared.
+        selected = tool.name
+        llm_tool = tool_registry.get_tool(output.tool_name) if output.tool_name else None
+        if llm_tool and llm_tool.name != tool.name:
+            selected = llm_tool.name
+            logger.info(
+                f"[{state.get('request_id')}] Tool Selection Node: tool-selection "
+                f"override {tool.name} → {selected} (pending_tool cleared)."
+            )
+
+        updates: Dict[str, Any] = {
+            "selected_tool": selected,
             "tool_arguments": output.tool_arguments,
         }
+        if selected != tool.name:
+            updates["pending_tool"] = None
+        logger.info(f"[{state.get('request_id')}] Selected tool: {selected}")
+        return updates
     except AllProvidersExhaustedException as e:
         logger.critical(f"[{state.get('request_id')}] Tool Selection Node: ALL providers exhausted — {e}")
         from app.shared.enums import ConversationStatus
@@ -1034,7 +917,7 @@ async def tool_execution_node(state: GraphState, config: RunnableConfig) -> Dict
         raise RuntimeError("Workflow Invariant Violation: Tool execution attempted while NOT_READY")
 
     draft = state.get("log_draft")
-    if not draft:
+    if not draft and state.get("selected_tool") != "search_logs":
         logger.error(f"[{state.get('request_id')}] Workflow Invariant Violation: Tool execution attempted with no DynamicLogDraft")
         return {"tool_status": "failed", "validation_errors": ["No log draft found."]}
 
@@ -1053,6 +936,11 @@ async def tool_execution_node(state: GraphState, config: RunnableConfig) -> Dict
             }
 
     tool_args = state.get("tool_arguments") or {}
+    if tool_name_value == "search_logs":
+        query = tool_args.get("query")
+        if not isinstance(query, str) or len(query) > 256 or "\x00" in query or not any(c.isalnum() for c in query):
+            message = "Enter search keywords or a document reference (up to 256 characters)."
+            return {"tool_status": "failed", "tool_result": {"message": message}, "validation_errors": [message]}
 
     # Special handling: inject active log reference for edit_log
     if tool_name_value == "edit_log" and not tool_args.get("log_reference"):
@@ -1089,12 +977,14 @@ async def tool_execution_node(state: GraphState, config: RunnableConfig) -> Dict
         logger.error("ToolExecutionContext not found in config")
         return {"tool_status": "failed", "validation_errors": ["Execution context missing."]}
 
+    if tool_name_value == "save_log" and decision.reset_context and not context.source_is_current_message:
+        # A conversational pivot started a new record while the old file was still open.
+        context = context.model_copy(update={"source_text": None, "source_filename": None, "excluded_fields": frozenset()})
+
     try:
         validated_args = tool.args_schema(**tool_args)
-        logger.info(f"[{state.get('request_id')}] Validated arguments: {validated_args.model_dump()}")
 
         result = await tool.execute(context, **validated_args.model_dump())
-        logger.info(f"[{state.get('request_id')}] Tool execution result: {result}")
 
         result_status = None
         if isinstance(result, dict):
@@ -1128,6 +1018,10 @@ async def tool_execution_node(state: GraphState, config: RunnableConfig) -> Dict
         }
 
     except Exception as e:
+        if tool_name_value == "search_logs":
+            logger.error(f"[{state.get('request_id')}] Search failed: {type(e).__name__}")
+            message = "Document search is unavailable. Please try again."
+            return {"tool_status": "failed", "tool_result": {"message": message}, "validation_errors": [message]}
         logger.error(f"[{state.get('request_id')}] Tool Execution Error: {e}")
         from app.shared.enums import ConversationStatus
         return {
@@ -1139,6 +1033,31 @@ async def tool_execution_node(state: GraphState, config: RunnableConfig) -> Dict
 
 async def response_node(state: GraphState) -> Dict[str, Any]:
     logger.info(f"[{state.get('request_id')}] Response Node: Generating response")
+    if state.get("action") in ("save_reviewed", "capture"):
+        if state["action"] == "capture":
+            draft = state["log_draft"]
+            response = ("Captured the original text as a note." if list(draft.fields) == ["text"]
+                        else "Your extracted fields are ready for review.")
+        else:
+            result = state.get("tool_result") or {}
+            response = result.get("message") or " ".join(state.get("validation_errors") or ["Could not save the record."])
+        if state.get("conversation_id"):
+            await conversation_memory_service.append_message(state["conversation_id"], "assistant", response, allow_compression=False)
+        return {"llm_response": response}
+    if state.get("detected_intent") == "search_logs":
+        result = state.get("tool_result") or {}
+        response = result.get("message") or "Enter search keywords or a document reference (up to 256 characters)."
+        if result.get("results"):
+            lines = [
+                f"- {item['log_reference']} · {item.get('source_filename') or item['schema_name']}"
+                for item in result["results"]
+            ]
+            response += "\n" + "\n".join(lines)
+        if state.get("conversation_id"):
+            await conversation_memory_service.append_message(
+                state["conversation_id"], "assistant", response, allow_compression=False
+            )
+        return {"llm_response": response}
     llm = get_llm_provider()
 
     decision = state.get("decision_output")
@@ -1167,79 +1086,18 @@ async def response_node(state: GraphState) -> Dict[str, Any]:
         tool_status = state.get("tool_status")
         validation_errors = state.get("validation_errors")
 
-        # ── BUG-004 fix: AI Risk Assessment for QMS / Complaint / Healthcare saves ──
-        # Detect a successful save_log for a complaint or quality management domain
-        # and switch to the dedicated risk_assessment prompt so the response includes
-        # severity, priority, root cause hypothesis, CAPA recommendations, and
-        # regulatory flag instead of a generic "saved successfully" message.
-        is_qms_save = False
-        if (
-            tool_result
-            and tool_status == "success"
-            and isinstance(tool_result, dict)
-            and tool_result.get("log_reference")
-        ):
-            draft = state.get("log_draft")
-            schema = (draft.schema_name or "").lower() if draft else ""
-            domain = (draft.domain or "").lower() if draft else ""
-            qms_schemas = {
-                "product complaint", "complaint", "quality complaint",
-                "adverse event", "medical incident", "quality incident",
-                "deviation", "oos", "out of specification",
-            }
-            qms_domains = {"quality management", "healthcare", "pharmaceutical", "medical", "qms"}
-            if (
-                any(s in schema for s in qms_schemas)
-                or any(d in domain for d in qms_domains)
-            ):
-                is_qms_save = True
+        system_prompt = load_prompt("system.md")
+        response_prompt = load_prompt("response.md").format(user_message=state["user_message"])
 
-        if is_qms_save and tool_result:
-            # Build a compact JSON representation of what was saved for the prompt
-            draft = state.get("log_draft")
-            saved_fields = {}
-            if draft:
-                saved_fields = {
-                    "schema": draft.schema_name,
-                    "domain": draft.domain,
-                    **{k: v for k, v in (draft.fields or {}).items() if not k.startswith("_")},
-                }
-            log_data_str = json.dumps(saved_fields, indent=2, default=str)
-            log_reference = tool_result.get("log_reference", "LOG-UNKNOWN")
+        if tool_result:
+            response_prompt += f"\n\nTool Result ({tool_status}):\n{json.dumps(tool_result, indent=2, default=str)}"
+        elif validation_errors:
+            response_prompt += f"\n\nTool Execution Failed with validation errors:\n{json.dumps(validation_errors)}"
 
-            try:
-                risk_prompt = load_prompt("risk_assessment.md").format(
-                    log_reference=log_reference,
-                    log_data=log_data_str,
-                )
-                messages = [
-                    {"role": "system", "content": risk_prompt},
-                    {"role": "user", "content": f"Generate the risk assessment for {log_reference}."}
-                ]
-                logger.info(
-                    f"[{state.get('request_id')}] Response Node: Generating AI Risk Assessment "
-                    f"for QMS save {log_reference}."
-                )
-            except Exception as e:
-                logger.warning(
-                    f"[{state.get('request_id')}] Response Node: Could not load risk_assessment.md ({e}); "
-                    f"falling back to standard response prompt."
-                )
-                is_qms_save = False  # fall through to standard prompt
-
-        if not is_qms_save:
-            system_prompt = load_prompt("system.md")
-            response_prompt = load_prompt("response.md").format(user_message=state["user_message"])
-
-            if tool_result:
-                response_prompt += f"\n\nTool Result ({tool_status}):\n{json.dumps(tool_result, indent=2, default=str)}"
-            elif validation_errors:
-                response_prompt += f"\n\nTool Execution Failed with validation errors:\n{json.dumps(validation_errors)}"
-
-            messages = [
-                {"role": "system", "content": system_prompt + "\n\n" + context_str},
-                {"role": "user", "content": response_prompt}
-            ]
+        messages = [
+            {"role": "system", "content": system_prompt + "\n\n" + context_str},
+            {"role": "user", "content": response_prompt}
+        ]
 
     try:
         response = await llm.generate_response(messages=messages)
@@ -1247,17 +1105,7 @@ async def response_node(state: GraphState) -> Dict[str, Any]:
         logger.critical(f"[{state.get('request_id')}] Response Node: ALL providers exhausted — {e}")
         metadata = state.get("metadata", {}).copy()
         metadata["all_providers_exhausted"] = True
-        response = (
-            "⚠️ All configured AI provider API keys have been exhausted "
-            "(rate-limited or invalid). The system automatically tried every "
-            "key across Groq, Cerebras, Gemini, and OpenRouter.\n\n"
-            "**To recover:** Add new API keys to your `backend/.env` file:\n"
-            "```\nGROQ_API_KEY_1=gsk_...\n"
-            "CEREBRAS_API_KEY_1=csk-...\n"
-            "GEMINI_API_KEY_1=AIza...\n"
-            "OPENROUTER_API_KEY_1=sk-or-...\n```\n"
-            "Then restart the backend server."
-        )
+        response = "The document assistant is temporarily unavailable. Please try again later."
     except (RateLimitException, InvalidAPIKeyException) as e:
         logger.error(f"[{state.get('request_id')}] Response Node: API Limit/Key Error ({type(e).__name__}): {e}.")
         response = fallback_templates.generate_fallback_response(state)

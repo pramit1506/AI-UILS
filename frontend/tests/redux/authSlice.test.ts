@@ -1,19 +1,20 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { configureStore } from '@reduxjs/toolkit';
 import authReducer, {
   logout,
+  logoutUser,
   openAuthModal,
   closeAuthModal,
   setAuthModalTab,
   openProfileModal,
   closeProfileModal,
-  clearAuthError,
   loginUser,
   registerUser,
   resetPassword,
   deleteAccount,
-  deleteAccountByEmail,
   updateUserProfile,
 } from '../../src/redux/authSlice';
+import * as authSliceModule from '../../src/redux/authSlice';
 import { UserProfile } from '../../src/types/auth';
 
 describe('authSlice Redux operations', () => {
@@ -107,7 +108,7 @@ describe('authSlice Redux operations', () => {
         { access_token: 'jwt-reset-token', token_type: 'bearer', user: mockUser },
         'req-reset',
         {
-          login: 'dr.jane@hospital.org',
+          current_password: 'old_password123',
           new_password: 'new_password123',
         }
       )
@@ -143,28 +144,12 @@ describe('authSlice Redux operations', () => {
     expect(state.successMessage).toBe('Account deleted successfully.');
   });
 
-  it('handles deleteAccountByEmail.fulfilled', () => {
-    const state = authReducer(
-      {
-        user: null,
-        token: null,
-        isAuthenticated: false,
-        loading: false,
-        error: null,
-        successMessage: null,
-        isAuthModalOpen: true,
-        isProfileModalOpen: false,
-        authModalTab: 'delete-account',
-      },
-      deleteAccountByEmail.fulfilled(
-        { deleted: true, email: 'dr.jane@hospital.org' },
-        'req-del-email',
-        { email: 'dr.jane@hospital.org', confirm_text: 'DELETE' }
-      )
-    );
-
-    expect(state.authModalTab).toBe('register');
-    expect(state.successMessage).toContain('Account has been removed');
+  it('no longer exports deleteAccountByEmail (insecure endpoint removed)', () => {
+    // The unauthenticated by-email deletion endpoint was a critical
+    // vulnerability; the thunk was removed along with the endpoint.
+    // If someone reintroduces it, this test fails and forces a review.
+    const exported = Object.keys(authSliceModule);
+    expect(exported).not.toContain('deleteAccountByEmail');
   });
 
   it('handles updateUserProfile.fulfilled', () => {
@@ -191,9 +176,28 @@ describe('authSlice Redux operations', () => {
     expect(state.user?.bio).toBe('VP of QMS');
   });
 
+  it('handles logoutUser.fulfilled and clears the profile cache', async () => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('auth_user', JSON.stringify(mockUser));
+    }
+
+    const store = configureStore({ reducer: { auth: authReducer } });
+    store.dispatch(logoutUser.fulfilled(undefined, 'req-logout'));
+
+    const state = store.getState().auth;
+    expect(state.user).toBeNull();
+    expect(state.token).toBeNull();
+    expect(state.isAuthenticated).toBe(false);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      // The JWT itself is never client-readable (httpOnly cookie), so only
+      // the profile cache is cleared.
+      expect(window.localStorage.getItem('auth_user')).toBeNull();
+      expect(window.localStorage.getItem('auth_token')).toBeNull();
+    }
+  });
+
   it('handles logout and resets user credentials', () => {
     if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.setItem('auth_token', 'sample-token');
       window.localStorage.setItem('auth_user', JSON.stringify(mockUser));
     }
 

@@ -7,6 +7,8 @@ interface DocumentState {
   searchQuery: string;
   documentViewType: 'text' | 'preview';
   selectedSnippet: string | null;
+  /** Object URL backing an uploaded file — revoked by callers when replaced */
+  fileObjectUrl: string | null;
 }
 
 const initialState: DocumentState = {
@@ -15,6 +17,7 @@ const initialState: DocumentState = {
   searchQuery: '',
   documentViewType: 'text',
   selectedSnippet: null,
+  fileObjectUrl: null,
 };
 
 const documentSlice = createSlice({
@@ -24,7 +27,12 @@ const documentSlice = createSlice({
     setDocument: (state, action: PayloadAction<OriginalDocument | null>) => {
       state.currentDocument = action.payload;
       state.activeHighlightField = null;
+      // Reset artifacts of the previous document so stale search terms and
+      // preview modes no longer bleed into the newly loaded one.
+      state.searchQuery = '';
+      state.documentViewType = 'text';
       state.selectedSnippet = null;
+      state.fileObjectUrl = null;
     },
     updateDocumentText: (state, action: PayloadAction<string>) => {
       if (state.currentDocument) {
@@ -51,11 +59,16 @@ const documentSlice = createSlice({
     setSelectedSnippet: (state, action: PayloadAction<string | null>) => {
       state.selectedSnippet = action.payload;
     },
+    setFileObjectUrl: (state, action: PayloadAction<string | null>) => {
+      state.fileObjectUrl = action.payload;
+    },
     clearDocument: (state) => {
       state.currentDocument = null;
       state.activeHighlightField = null;
       state.searchQuery = '';
       state.selectedSnippet = null;
+      state.documentViewType = 'text';
+      state.fileObjectUrl = null;
     },
   },
 });
@@ -67,6 +80,7 @@ export const {
   setSearchQuery,
   setDocumentViewType,
   setSelectedSnippet,
+  setFileObjectUrl,
   clearDocument,
 } = documentSlice.actions;
 

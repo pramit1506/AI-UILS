@@ -11,7 +11,7 @@ import DynamicLogForm from '../../src/components/LogForm/DynamicLogForm';
 
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
-const renderWithRedux = (preloadedState?: any) => {
+const renderWithRedux = (preloadedState?: Partial<import("../../src/redux/store").RootState>) => {
   const store = configureStore({
     reducer: {
       log: logReducer,
@@ -105,7 +105,7 @@ describe('DynamicLogForm Component', () => {
     fireEvent.click(approveBtn);
     expect(store.getState().log.fieldStatuses.invoice_number).toBe('approved');
 
-    const rejectBtn = screen.getByTitle('Reject / flag this field (R)');
+    const rejectBtn = screen.getByTitle('Exclude this field from the saved record (R)');
     fireEvent.click(rejectBtn);
     expect(store.getState().log.fieldStatuses.invoice_number).toBe('rejected');
   });

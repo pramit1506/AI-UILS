@@ -4,8 +4,15 @@ from app.graph.state import GraphState
 from app.graph.nodes import input_node, intent_node, entity_extraction_node, decision_node, tool_selection_node, tool_execution_node, response_node, output_node
 from app.graph.router import route_after_intent, route_after_tool_selection, route_after_decision
 
-def build_graph():
-    """Compile and return the LangGraph workflow."""
+def build_graph(checkpointer=None):
+    """Compile and return the LangGraph workflow.
+
+    Args:
+        checkpointer: Optional LangGraph checkpointer. When None, falls back to
+            an in-process `MemorySaver` so import-time usage remains safe.
+            Production usage passes a persistent checkpointer (e.g.
+            AsyncSqliteSaver) via `app.dependencies.graph.get_graph`.
+    """
     builder = StateGraph(GraphState)
     
     # Add nodes
@@ -28,6 +35,7 @@ def build_graph():
         route_after_intent,
         {
             "response_node": "response_node",
+            "tool_execution_node": "tool_execution_node",
             "entity_extraction_node": "entity_extraction_node"
         }
     )
@@ -59,7 +67,7 @@ def build_graph():
     builder.add_edge("response_node", "output_node")
     builder.add_edge("output_node", END)
     
-    memory = MemorySaver()
+    memory = checkpointer if checkpointer is not None else MemorySaver()
     return builder.compile(checkpointer=memory)
 
 # Provide a compiled instance

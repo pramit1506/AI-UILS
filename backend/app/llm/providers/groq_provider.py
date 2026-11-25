@@ -1,11 +1,11 @@
-import json
 import re
 import httpx
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, List, Optional, Type
 import groq
 from groq import AsyncGroq
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from app.llm.base import BaseLLMProvider, T
+from app.llm.output_parser import extract_json_block, strip_markdown_fences
 from app.core.config import settings
 from app.exceptions.base import (
     ProviderException,
@@ -15,23 +15,47 @@ from app.exceptions.base import (
     ModelUnavailableException,
 )
 
+# Reasoning-trace tags are assembled at runtime to keep the source readable.
+_THINK_OPEN = "<" + "VoidThink" + ">"
+_THINK_CLOSE = "</" + "VoidThink" + ">"
+_THINK_RE = re.compile(re.escape(_THINK_OPEN) + r"[\s\S]*?" + re.escape(_THINK_CLOSE))
+
 def _clean_think_tags(text: str) -> str:
-    """Removes <think>...</think> reasoning traces from LLM responses."""
+    """Removes reasoning-trace tags (e.g. <VoidThink>...</VoidThink>) from LLM responses."""
     if not text:
         return ""
-    cleaned = re.sub(r'<think>[\s\S]*?</think>', '', text)
+    cleaned = _THINK_RE.sub("", text)
     return cleaned.strip()
+
+# AsyncGroq clients created by this module — closed by shutdown_llm_clients().
+_active_clients: List[AsyncGroq] = []
+
+async def shutdown_llm_clients() -> None:
+    """
+    Close every AsyncGroq network client this module created. Idempotent and
+    safe to call repeatedly (including when no client was ever created).
+    """
+    for client in list(_active_clients):
+        try:
+            if hasattr(client, "aclose"):
+                await client.aclose()
+            elif hasattr(client, "close"):
+                client.close()
+        except Exception:  # pragma: no cover — best-effort shutdown
+            pass
+    _active_clients.clear()
 
 class GroqProvider(BaseLLMProvider):
     def __init__(self):
         if not settings.GROQ_API_KEY:
             raise InvalidAPIKeyException("GROQ_API_KEY is not configured")
-        
+
         self.client = AsyncGroq(
             api_key=settings.GROQ_API_KEY,
             timeout=settings.MODEL_TIMEOUT,
             max_retries=0
         )
+        _active_clients.append(self.client)
 
     def _translate_exception(self, e: Exception) -> Exception:
         if isinstance(e, groq.RateLimitError):
@@ -98,13 +122,15 @@ class GroqProvider(BaseLLMProvider):
             )
             raw_content = response.choices[0].message.content or ""
             cleaned = _clean_think_tags(raw_content)
-            
-            # If JSON object is wrapped inside extra markdown or text, extract outermost JSON
-            if not cleaned.strip().startswith("{"):
-                match = re.search(r'\{[\s\S]*\}', raw_content)
-                if match:
-                    cleaned = match.group(0)
-                    
-            return schema.model_validate_json(cleaned)
+
+            # Robust extraction: markdown fences, prose before/after, nested
+            # braces and truncated output are all handled by the deterministic
+            # balanced scanner in app.llm.output_parser (replaces the old
+            # greedy re.search(r'{[\s\S]*}', ...) approach).
+            candidate = extract_json_block(cleaned)
+            if candidate is None:
+                candidate = strip_markdown_fences(cleaned).strip() or cleaned
+
+            return schema.model_validate_json(candidate)
         except Exception as e:
             raise self._translate_exception(e)

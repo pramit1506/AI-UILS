@@ -1,66 +1,83 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+﻿@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 /* ═══════════════════════════════════════════════════════════════
-   UNIVERSAL LOG — Modern SaaS Design System (Linear / Vercel Dark)
+   UNIVERSAL LOG — Design System
+   Palette: pastel grey · powder blue · black (light default, dark variant)
+
+   Theme contract: `index.html defaults to light`; App's ThemeBridge sets
+   `<html data-theme="dark|light">`. Every color lives on a token in ONE of
+   these two blocks — no component CSS may hardcode palette literals.
    ═══════════════════════════════════════════════════════════════ */
 
 :root {
-  /* ── Brand & Dynamic Accent ─────────────────────────────────── */
-  --accent:               #6366f1;
-  --accent-hover:         #818cf8;
-  --accent-light:         #a5b4fc;
-  --accent-glow:          rgba(99, 102, 241, 0.28);
-  --accent-subtle:        rgba(99, 102, 241, 0.10);
-  --accent-border:        rgba(99, 102, 241, 0.25);
-  --accent-gradient:      linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
-  --accent-gradient-subtle: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.10));
+  /* ── Brand & Dynamic Accent (powder blue) ──────────────────── */
+  --accent:               #5b87ad;      /* usable powder blue (WCAG-safe on pastel grey) */
+  --accent-hover:         #6f98bd;
+  --accent-light:         #a9c6dd;      /* the true pastel powder blue */
+  --accent-glow:          rgba(125, 168, 199, 0.32);
+  --accent-subtle:        rgba(120, 164, 197, 0.12);
+  --accent-border:        rgba(120, 164, 197, 0.32);
+  --accent-gradient:      linear-gradient(135deg, #5b87ad 0%, #7ca8ca 55%, #a9c6dd 100%);
+  --accent-gradient-subtle: linear-gradient(135deg, rgba(120, 164, 197, 0.16), rgba(169, 198, 221, 0.10));
 
-  /* ── Modern Zinc/Slate Surface Stack ───────────────────────── */
-  --color-background:     #09090b;       /* Zinc 950 base */
-  --color-surface:        #121316;       /* Elevated dark */
-  --color-surface-2:      #18191e;       /* Card/Panel surface */
-  --color-surface-3:      #22232a;       /* Highlight/Active surface */
-  --color-surface-hover:  rgba(255, 255, 255, 0.05);
-  
+  /* ── Pastel Grey Surface Stack (light) ─────────────────────── */
+  --color-background:     #eef1f5;      /* pastel app grey */
+  --color-surface:        #f6f8fb;      /* bars / headers */
+  --color-surface-2:      #fbfcfe;      /* cards & panels */
+  --color-surface-3:      #e4e9f0;      /* highlight / active */
+  --color-surface-hover:  rgba(15, 23, 32, 0.045);
+
+  /* Deepest sunk surface (code blocks, viewer canvas) — near black */
+  --color-sunken:         #10141a;
+
   /* ── Translucent Glass & Borders ───────────────────────────── */
-  --color-glass:          rgba(255, 255, 255, 0.025);
-  --color-glass-card:     rgba(24, 25, 30, 0.75);
-  --color-glass-border:   rgba(255, 255, 255, 0.07);
-  --color-glass-border-lg:rgba(255, 255, 255, 0.13);
-  --color-glass-hover:    rgba(255, 255, 255, 0.04);
+  --color-glass:          rgba(255, 255, 255, 0.45);
+  --color-glass-card:     rgba(251, 252, 254, 0.85);
+  --color-glass-border:   rgba(16, 26, 38, 0.10);
+  --color-glass-border-lg:rgba(16, 26, 38, 0.18);
+  --color-glass-hover:    rgba(16, 26, 38, 0.04);
   --color-border:         var(--color-glass-border);
 
-  /* ── Modern High-Legibility Typography ─────────────────────── */
-  --color-text-primary:   #f4f4f5;       /* Zinc 100 */
-  --color-text-secondary: #a1a1aa;       /* Zinc 400 */
-  --color-text-tertiary:  #71717a;       /* Zinc 500 */
-  --color-text-muted:     #52525b;       /* Zinc 600 */
-  --color-text-light:     #d4d4d8;       /* Zinc 300 */
+  /* Full-screen modal scrims & recessed input wells */
+  --color-scrim:          rgba(8, 10, 14, 0.55);
+  --color-input-sunken:   rgba(15, 23, 32, 0.05);
+
+  /* ── Typography (near-black on pastel grey) ────────────────── */
+  --color-text-primary:   #131920;      /* black ink */
+  --color-text-secondary: #454f5b;
+  --color-text-tertiary:  #66707d;
+  --color-text-muted:     #827e85;
+  --color-text-light:     #24292f;
+
+  /* Primary calls-to-action are solid black (brand) with light text */
+  --color-cta-bg:         #131920;
+  --color-cta-bg-hover:   #2a313a;
+  --color-cta-text:       #f6f8fb;
 
   /* ── Legacy Aliases ────────────────────────────────────────── */
   --color-primary:        var(--accent);
   --color-primary-hover:  var(--accent-hover);
 
-  /* ── Semantic System ───────────────────────────────────────── */
-  --color-success:        #10b981;       /* Emerald 500 */
-  --color-success-bg:     rgba(16, 185, 129, 0.10);
-  --color-success-border: rgba(16, 185, 129, 0.25);
-  --color-success-text:   #34d399;
+  /* ── Semantic System (tinted, pastel-adjacent) ─────────────── */
+  --color-success:        #1a9e77;
+  --color-success-bg:     rgba(26, 158, 119, 0.10);
+  --color-success-border: rgba(26, 158, 119, 0.28);
+  --color-success-text:   #0c7d5b;
 
-  --color-error:          #f43f5e;       /* Rose 500 */
-  --color-error-bg:       rgba(244, 63, 94, 0.10);
-  --color-error-border:   rgba(244, 63, 94, 0.25);
-  --color-error-text:     #fb7185;
+  --color-error:          #e0506e;
+  --color-error-bg:       rgba(224, 80, 110, 0.10);
+  --color-error-border:   rgba(224, 80, 110, 0.28);
+  --color-error-text:     #c22e4e;
 
-  --color-warning:        #f59e0b;       /* Amber 500 */
-  --color-warning-bg:     rgba(245, 158, 11, 0.10);
-  --color-warning-border: rgba(245, 158, 11, 0.25);
-  --color-warning-text:   #fbbf24;
+  --color-warning:        #d99013;
+  --color-warning-bg:     rgba(217, 144, 19, 0.10);
+  --color-warning-border: rgba(217, 144, 19, 0.28);
+  --color-warning-text:   #a06b0a;
 
-  --color-info:           #0ea5e9;       /* Sky 500 */
-  --color-info-bg:        rgba(14, 165, 233, 0.10);
-  --color-info-border:    rgba(14, 165, 233, 0.25);
-  --color-info-text:      #38bdf8;
+  --color-info:           #3f8fc9;
+  --color-info-bg:        rgba(63, 143, 201, 0.10);
+  --color-info-border:    rgba(63, 143, 201, 0.28);
+  --color-info-text:      #2f77aa;
 
   /* ── Spacing Tokens ────────────────────────────────────────── */
   --spacing-1:  0.25rem;
@@ -81,11 +98,11 @@
   --radius-2xl:  28px;
   --radius-full: 9999px;
 
-  /* ── Subtle Elevation & Layered Shadows ────────────────────── */
-  --shadow-xs:   0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-sm:   0 2px 6px rgba(0, 0, 0, 0.4);
-  --shadow-md:   0 6px 20px rgba(0, 0, 0, 0.5);
-  --shadow-lg:   0 12px 36px rgba(0, 0, 0, 0.65);
+  /* ── Subtle Elevation & Layered Shadows (light-friendly) ───── */
+  --shadow-xs:   0 1px 2px rgba(16, 26, 38, 0.06);
+  --shadow-sm:   0 2px 6px rgba(16, 26, 38, 0.08);
+  --shadow-md:   0 6px 20px rgba(16, 26, 38, 0.10);
+  --shadow-lg:   0 12px 36px rgba(16, 26, 38, 0.14);
   --shadow-glow: 0 0 28px var(--accent-glow);
 
   /* ── Micro-Interaction Transitions ─────────────────────────── */
@@ -94,6 +111,90 @@
   --duration-fast: 120ms;
   --duration-base: 200ms;
   --duration-slow: 350ms;
+}
+
+:root[data-palette="sand"] {
+  --accent: #50439b; --accent-hover: #433689; --accent-subtle: #6553ad16; --accent-border: #6553ad55;
+  --color-background: #f5f1e8; --color-surface: #faf7ed; --color-surface-2: #fffdf7; --color-surface-3: #eae5db;
+  --color-cta-bg: #413478; --color-cta-bg-hover: #352960; --color-cta-text: #fff;
+}
+:root[data-palette="sage"] {
+  --accent: #34634e; --accent-hover: #264d3c; --accent-subtle: #467d5918; --accent-border: #467d5955;
+  --color-background: #edf1e9; --color-surface: #f4f6ef; --color-surface-2: #fafcf7; --color-surface-3: #e1e8dc;
+  --color-cta-bg: #28533f; --color-cta-bg-hover: #204433; --color-cta-text: #fff;
+}
+:root[data-palette="sand"][data-theme="dark"] {
+  --accent: #b4a5ff; --accent-subtle: #b4a5ff22; --color-background: #191720; --color-surface: #211f29;
+  --color-surface-2: #292631; --color-surface-3: #36313f; --color-cta-bg: #c4b7ff; --color-cta-text: #211c35;
+}
+:root[data-palette="sage"][data-theme="dark"] {
+  --accent: #9bcead; --accent-subtle: #9bcead22; --color-background: #151d19; --color-surface: #202923;
+  --color-surface-2: #28332b; --color-surface-3: #344038; --color-cta-bg: #abd2b6; --color-cta-text: #14281c;
+}
+
+/* ── Dark variant: black + pastel grey text + powder blue accents ── */
+:root[data-theme="dark"] {
+  --accent:               #8fb8d8;
+  --accent-hover:         #a9c6dd;
+  --accent-light:         #b9d2e5;
+  --accent-glow:          rgba(143, 184, 216, 0.22);
+  --accent-subtle:        rgba(143, 184, 216, 0.10);
+  --accent-border:        rgba(143, 184, 216, 0.26);
+  --accent-gradient:      linear-gradient(135deg, #6d92b4 0%, #8fb8d8 55%, #b9d2e5 100%);
+  --accent-gradient-subtle: linear-gradient(135deg, rgba(143, 184, 216, 0.12), rgba(109, 146, 180, 0.08));
+
+  --color-background:     #0c0f14;      /* near black */
+  --color-surface:        #11151c;
+  --color-surface-2:      #171c24;
+  --color-surface-3:      #212832;
+  --color-surface-hover:  rgba(255, 255, 255, 0.05);
+  --color-sunken:         #07090d;
+
+  --color-glass:          rgba(255, 255, 255, 0.03);
+  --color-glass-card:     rgba(23, 28, 36, 0.78);
+  --color-glass-border:   rgba(255, 255, 255, 0.08);
+  --color-glass-border-lg:rgba(255, 255, 255, 0.14);
+  --color-glass-hover:    rgba(255, 255, 255, 0.04);
+
+  --color-scrim:          rgba(0, 0, 0, 0.7);
+  --color-input-sunken:   rgba(0, 0, 0, 0.35);
+
+  /* Pastel grey text on black */
+  --color-text-primary:   #e6e9ee;
+  --color-text-secondary: #a6adb8;
+  --color-text-tertiary:  #7a828e;
+  --color-text-muted:     #565d68;
+  --color-text-light:     #c9ced8;
+
+  /* Light grey CTA on black, black text (inverted powder-blue partner) */
+  --color-cta-bg:         #e6e9ee;
+  --color-cta-bg-hover:   #c9ced8;
+  --color-cta-text:       #0c0f14;
+
+  --color-success:        #2fbf8f;
+  --color-success-bg:     rgba(47, 191, 143, 0.10);
+  --color-success-border: rgba(47, 191, 143, 0.25);
+  --color-success-text:   #5ccfa3;
+
+  --color-error:          #f46581;
+  --color-error-bg:       rgba(244, 101, 129, 0.10);
+  --color-error-border:   rgba(244, 101, 129, 0.25);
+  --color-error-text:     #f88ba0;
+
+  --color-warning:        #eaab2f;
+  --color-warning-bg:     rgba(234, 171, 47, 0.10);
+  --color-warning-border: rgba(234, 171, 47, 0.25);
+  --color-warning-text:   #f2c15c;
+
+  --color-info:           #4aa5dd;
+  --color-info-bg:        rgba(74, 165, 221, 0.10);
+  --color-info-border:    rgba(74, 165, 221, 0.25);
+  --color-info-text:      #74bce4;
+
+  --shadow-xs:   0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-sm:   0 2px 6px rgba(0, 0, 0, 0.40);
+  --shadow-md:   0 6px 20px rgba(0, 0, 0, 0.50);
+  --shadow-lg:   0 12px 36px rgba(0, 0, 0, 0.62);
 }
 
 /* ── Reset ──────────────────────────────────────────────────── */
@@ -105,17 +206,29 @@
 
 /* ── Base ───────────────────────────────────────────────────── */
 html {
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
   color-scheme: dark;
 }
 
 body {
-  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background-color: var(--color-background);
   color: var(--color-text-primary);
-  line-height: 1.5;
-  letter-spacing: -0.012em;
+  line-height: 1.55;
+  letter-spacing: -0.006em;
+  font-size: 0.925rem;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color var(--duration-base) var(--ease-out), color var(--duration-base) var(--ease-out);
+}
+
+/* Headings: lighter weight, generous tracking — quiet hierarchy */
+h1, h2, h3, h4 {
+  font-weight: 600;
+  letter-spacing: -0.015em;
 }
 
 #root {
@@ -139,17 +252,17 @@ code, kbd, pre, .font-mono {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--color-glass-border-lg);
   border-radius: var(--radius-full);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--color-text-muted);
 }
 
 /* ── Selection ──────────────────────────────────────────────── */
 ::selection {
-  background: rgba(99, 102, 241, 0.25);
-  color: #fff;
+  background: var(--accent-subtle);
+  color: var(--color-text-primary);
 }
 
 /* ── Focus visible ──────────────────────────────────────────── */

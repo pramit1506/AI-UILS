@@ -12,6 +12,8 @@ class LogRecordCreate(BaseModel):
     field_metadata: Dict[str, Any] = Field(default_factory=dict)
     summary: Optional[str] = None
     source: Optional[str] = None
+    source_filename: Optional[str] = None
+    source_text: Optional[str] = None
     conversation_id: Optional[str] = None
     user_id: Optional[uuid.UUID] = None
     requires_review: bool = False
@@ -34,6 +36,8 @@ class LogRecordRead(BaseModel):
     data: Dict[str, Any] = Field(default_factory=dict)
     summary: Optional[str] = None
     source: Optional[str] = None
+    source_filename: Optional[str] = None
+    has_source_text: bool = False
     conversation_id: Optional[str] = None
     user_id: Optional[uuid.UUID] = None
     requires_review: bool = False

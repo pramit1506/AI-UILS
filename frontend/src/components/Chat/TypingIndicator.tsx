@@ -1,27 +1,45 @@
 import React, { useEffect, useState } from 'react';
+import { Sparkles } from 'lucide-react';
 import { useAppSelector } from '../../redux/hooks';
-import './Chat.css';
+import './StreamingIndicator.css';
 
 export const TypingIndicator: React.FC = () => {
   const agent = useAppSelector((state) => state.agent);
   const toolStatus = agent?.toolStatus ?? 'idle';
   const selectedTool = agent?.selectedTool ?? null;
-  const [text, setText] = useState('AI is typing');
+
+  const [takingLonger, setTakingLonger] = useState(false);
 
   useEffect(() => {
-    if (toolStatus === 'executing' && selectedTool) {
-      setText(`Executing ${selectedTool}`);
-    } else {
-      setText('AI is processing request');
-    }
-  }, [toolStatus, selectedTool]);
+    const timer = setTimeout(() => setTakingLonger(true), 15_000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  let label: string;
+  if (toolStatus === 'executing' && selectedTool) {
+    label = `Running ${selectedTool.replace(/_/g, ' ')}`;
+  } else if (toolStatus === 'success') {
+    label = 'Finalising the result';
+  } else {
+    label = takingLonger ? 'Still working. This request is taking longer than usual.' : 'Analyzing your request';
+  }
 
   return (
-    <div className="typing-indicator">
-      <div className="typing-dots">
-        <span>.</span><span>.</span><span>.</span>
+    <div className="streaming-indicator" role="status" aria-live="polite">
+      <div className="streaming-avatar">
+        <Sparkles size={13} />
       </div>
-      <span className="typing-text">{text}...</span>
+      <div className="streaming-body">
+        <div className="streaming-row">
+          <span className="streaming-label">{label}</span>
+          <span className="streaming-dots" aria-hidden="true">
+            <span /><span /><span />
+          </span>
+        </div>
+        <div className="streaming-shimmer" aria-hidden="true">
+          <span className="streaming-shimmer-bar" />
+        </div>
+      </div>
     </div>
   );
 };

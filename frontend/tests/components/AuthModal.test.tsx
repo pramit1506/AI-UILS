@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import authReducer from '../../src/redux/authSlice';
@@ -8,9 +8,8 @@ import chatReducer from '../../src/redux/chatSlice';
 import logReducer from '../../src/redux/logSlice';
 import agentReducer from '../../src/redux/agentSlice';
 import documentReducer from '../../src/redux/documentSlice';
-import uiReducer from '../../src/redux/uiSlice';
 import { AuthModal } from '../../src/components/Auth/AuthModal';
-import { authService } from '../../src/services/authService';
+import { apiClient } from '../../src/services/api';
 
 vi.mock('../../src/services/authService', () => ({
   authService: {
@@ -21,7 +20,7 @@ vi.mock('../../src/services/authService', () => ({
   },
 }));
 
-function createTestStore(preloadedState?: any) {
+function createTestStore(preloadedState?: Partial<import("../../src/redux/store").RootState>) {
   return configureStore({
     reducer: {
       auth: authReducer,
@@ -29,7 +28,6 @@ function createTestStore(preloadedState?: any) {
       log: logReducer,
       agent: agentReducer,
       document: documentReducer,
-      ui: uiReducer,
     },
     preloadedState,
   });
@@ -117,12 +115,12 @@ describe('AuthModal Component', () => {
       </Provider>
     );
 
-    expect(screen.getByText('Instant Demo Accounts')).toBeInTheDocument();
+    expect(screen.getByText('Trial account and data')).toBeInTheDocument();
     expect(screen.getByText('Dr. Jane Smith')).toBeInTheDocument();
     expect(screen.getByText('Alex Rivera')).toBeInTheDocument();
   });
 
-  it('renders Forgot Password button and navigates to Reset Password form', () => {
+  it('recovers a signed-out account using an emailed code', async () => {
     const store = createTestStore({
       auth: {
         user: null,
@@ -147,13 +145,32 @@ describe('AuthModal Component', () => {
     expect(forgotPwBtn).toBeInTheDocument();
     fireEvent.click(forgotPwBtn);
 
-    expect(screen.getByText('Reset Password')).toBeInTheDocument();
-    expect(screen.getByLabelText(/Registered Email or Username/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/^New Password/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/^Confirm New Password/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Account email')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Email me a code' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /back to sign in/i })).toBeInTheDocument();
+
+    // The old reset form fields must not appear for unauthenticated users.
+    expect(screen.queryByLabelText(/Current Password/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/New Password/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Confirm New Password/i)).not.toBeInTheDocument();
+    const post = vi.spyOn(apiClient, 'post')
+      .mockResolvedValueOnce({ data: { message: 'Check your email.' } })
+      .mockResolvedValueOnce({ data: { message: 'Password updated.' } });
+    try {
+      fireEvent.change(screen.getByLabelText('Account email'), { target: { value: 'owner@example.org' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Email me a code' }));
+      fireEvent.change(await screen.findByLabelText('Six-digit code'), { target: { value: '012345' } });
+      fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'updated-pass' } });
+      fireEvent.change(screen.getByLabelText('Confirm new password'), { target: { value: 'updated-pass' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Reset password' }));
+      expect(await screen.findByText('Your password has been updated.')).toBeVisible();
+      expect(post).toHaveBeenLastCalledWith('/auth/recovery/confirm', { email: 'owner@example.org', code: '012345', new_password: 'updated-pass' });
+    } finally {
+      post.mockRestore();
+    }
   });
 
-  it('navigates to Delete Account recovery view', () => {
+  it('Delete Account view shows the sign-in-required notice instead of a purge form', () => {
     const store = createTestStore({
       auth: {
         user: null,
@@ -164,7 +181,7 @@ describe('AuthModal Component', () => {
         successMessage: null,
         isAuthModalOpen: true,
         isProfileModalOpen: false,
-        authModalTab: 'reset-password',
+        authModalTab: 'delete-account',
       },
     });
 
@@ -174,11 +191,13 @@ describe('AuthModal Component', () => {
       </Provider>
     );
 
-    const wipeBtn = screen.getByRole('button', { name: /wipe \/ delete account instead/i });
-    expect(wipeBtn).toBeInTheDocument();
-    fireEvent.click(wipeBtn);
+    // The unauthenticated by-email deletion form was a critical vulnerability;
+    // it was replaced with a notice pointing to Profile → Delete Account.
+    expect(screen.getByText('Delete Account')).toBeInTheDocument();
+    expect(screen.getByText('Sign in required')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /back to sign in/i })).toBeInTheDocument();
 
-    expect(screen.getByText('Delete / Wipe Account')).toBeInTheDocument();
-    expect(screen.getByLabelText(/Registered Email to Purge/i)).toBeInTheDocument();
+    // The old purge form must not be rendered.
+    expect(screen.queryByLabelText(/Email to Purge/i)).not.toBeInTheDocument();
   });
 });

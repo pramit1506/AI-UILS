@@ -1,9 +1,13 @@
 from typing import Optional, Dict, Any
-from fastapi import APIRouter
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field, field_validator
 from loguru import logger
+from app.dependencies.auth import get_current_user
+from app.models.user import User
 
 router = APIRouter()
+
+MAX_LOG_FIELD_LENGTH = 8000
 
 class SystemLogCreate(BaseModel):
     level: str
@@ -13,10 +17,29 @@ class SystemLogCreate(BaseModel):
     stack_trace: Optional[str] = None
     additional_info: Optional[Dict[str, Any]] = None
 
+    @field_validator("level", "source", "url")
+    @classmethod
+    def _clean_short_fields(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        # Strip control characters to prevent log-forging via injected newlines
+        # and cap length to bound log-file abuse.
+        return "".join(ch for ch in v if ch.isprintable())[:500]
+
+    @field_validator("message", "stack_trace")
+    @classmethod
+    def _clean_long_fields(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        return "".join(ch for ch in v if ch.isprintable())[:MAX_LOG_FIELD_LENGTH]
+
 @router.post("/")
-async def create_system_log(log_data: SystemLogCreate):
-    """Receive logs from the frontend or other external sources and write them to the system log."""
-    
+async def create_system_log(
+    log_data: SystemLogCreate,
+    current_user: User = Depends(get_current_user),
+):
+    """Receive logs from the authenticated frontend and write them to the system log."""
+
     log_msg = f"[{log_data.source.upper()}] {log_data.message}"
     if log_data.url:
         log_msg += f" | URL: {log_data.url}"

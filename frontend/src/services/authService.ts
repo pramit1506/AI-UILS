@@ -6,11 +6,21 @@ import {
   ProfileUpdatePayload,
   UserProfile,
   PasswordResetCredentials,
-  AccountDeletePayload,
 } from '../types/auth';
 import { APIResponse } from '../types/api';
 
 export const authService = {
+  /**
+   * Log out: tells the backend to delete the httpOnly auth + CSRF cookies.
+   * Idempotent — safe to call even when the session already expired.
+   */
+  async logout(): Promise<{ logout: boolean }> {
+    const response = await apiClient.post<APIResponse<{ logout: boolean }>>(
+      '/auth/logout'
+    );
+    return response.data.data;
+  },
+
   /**
    * Register a new user profile.
    */
@@ -34,7 +44,9 @@ export const authService = {
   },
 
   /**
-   * Reset user password and obtain authenticated session.
+   * Change the authenticated user's password (previous password required).
+   * The old unauthenticated "reset by email/username" call was an
+   * account-takeover vector and has been removed server-side.
    */
   async resetPassword(credentials: PasswordResetCredentials): Promise<AuthResponse> {
     const response = await apiClient.post<APIResponse<AuthResponse>>(
@@ -55,21 +67,10 @@ export const authService = {
   },
 
   /**
-   * Unauthenticated recovery deletion to purge a stuck account by email.
-   */
-  async deleteAccountByEmail(payload: AccountDeletePayload): Promise<{ deleted: boolean; email: string }> {
-    const response = await apiClient.post<APIResponse<{ deleted: boolean; email: string }>>(
-      '/auth/delete-account',
-      payload
-    );
-    return response.data.data;
-  },
-
-  /**
    * Fetch current authenticated user's profile.
    */
-  async getCurrentUser(): Promise<UserProfile> {
-    const response = await apiClient.get<APIResponse<UserProfile>>('/auth/me');
+  async getCurrentUser(signal?: AbortSignal): Promise<UserProfile> {
+    const response = await apiClient.get<APIResponse<UserProfile>>('/auth/me', { signal });
     return response.data.data;
   },
 

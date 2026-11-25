@@ -16,11 +16,13 @@ import {
   closeProfileModal,
   updateUserProfile,
   deleteAccount,
-  logout,
+  logoutUser,
   openAuthModal,
 } from '../../redux/authSlice';
 import { clearChat } from '../../redux/chatSlice';
 import { clearLog } from '../../redux/logSlice';
+import { clearAgentState } from '../../redux/agentSlice';
+import { clearDocument } from '../../redux/documentSlice';
 import './ProfileModal.css';
 
 export const ProfileModal: React.FC = () => {
@@ -71,9 +73,11 @@ export const ProfileModal: React.FC = () => {
   };
 
   const handleLogout = () => {
-    dispatch(logout());
+    dispatch(logoutUser());
     dispatch(clearChat());
     dispatch(clearLog());
+    dispatch(clearAgentState());
+    dispatch(clearDocument());
     dispatch(closeProfileModal());
   };
 
@@ -88,6 +92,8 @@ export const ProfileModal: React.FC = () => {
     if (deleteAccount.fulfilled.match(result)) {
       dispatch(clearChat());
       dispatch(clearLog());
+      dispatch(clearAgentState());
+      dispatch(clearDocument());
       dispatch(closeProfileModal());
       dispatch(openAuthModal('register'));
     }

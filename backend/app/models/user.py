@@ -1,5 +1,6 @@
 import uuid
-from sqlalchemy import String, Boolean, Text
+from datetime import datetime
+from sqlalchemy import String, Boolean, Text, DateTime, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.base import Base
 from app.database.mixins import UUIDMixin, TimestampMixin
@@ -19,6 +20,11 @@ class User(UUIDMixin, TimestampMixin, Base):
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    session_version: Mapped[int] = mapped_column(Integer, server_default="0", nullable=False)
+    recovery_digest: Mapped[str | None] = mapped_column(String(64))
+    recovery_expires: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    recovery_attempts: Mapped[int] = mapped_column(Integer, server_default="0", nullable=False)
 
-    # Relationships
-    logs = relationship("LogRecord", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
+    # Authentication reads the user on every private request. Load records
+    # explicitly only when needed so a lookup does not fetch the entire ledger.
+    logs = relationship("LogRecord", back_populates="user", cascade="all, delete-orphan", lazy="raise")

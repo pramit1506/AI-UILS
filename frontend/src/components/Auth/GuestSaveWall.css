@@ -1,0 +1,200 @@
+﻿/* ═══════════════════════════════════════════════════════════════
+   GUEST SAVE WALL — login nudge when saving without an account
+   ═══════════════════════════════════════════════════════════════ */
+
+.gsw-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-4);
+  background: var(--color-scrim);
+  backdrop-filter: blur(6px);
+  animation: gsw-fade-in var(--duration-base) var(--ease-out);
+}
+
+.gsw-card {
+  position: relative;
+  width: min(430px, 100%);
+  padding: var(--spacing-8) var(--spacing-6) var(--spacing-6);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-glass-border-lg);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+  animation: gsw-pop-in var(--duration-slow) var(--ease-spring);
+}
+
+@keyframes gsw-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes gsw-pop-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.gsw-close-btn {
+  position: absolute;
+  top: var(--spacing-3);
+  right: var(--spacing-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.gsw-close-btn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-surface-hover);
+}
+
+.gsw-icon-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto var(--spacing-4);
+  border-radius: var(--radius-lg);
+  color: var(--accent);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+}
+
+.gsw-title {
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-2);
+}
+
+.gsw-subtitle {
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-5);
+}
+
+.gsw-subtitle strong {
+  color: var(--color-error-text);
+  font-weight: 700;
+}
+
+/* Guest vs. account comparison */
+.gsw-comparison {
+  display: flex;
+  align-items: stretch;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3);
+  margin-bottom: var(--spacing-5);
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-md);
+  background: var(--color-glass);
+}
+
+.gsw-compare-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-1);
+  padding: var(--spacing-2);
+  border-radius: var(--radius-sm);
+}
+
+.gsw-compare-col.account {
+  background: var(--accent-subtle);
+}
+
+.gsw-compare-icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.gsw-compare-col.guest .gsw-compare-icon {
+  color: var(--color-warning-text);
+}
+
+.gsw-compare-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.gsw-compare-detail {
+  font-size: 0.66rem;
+  line-height: 1.35;
+  color: var(--color-text-tertiary);
+  text-align: center;
+}
+
+.gsw-compare-divider {
+  align-self: center;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+/* Actions */
+.gsw-signin-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+  width: 100%;
+  padding: 0.7rem var(--spacing-4);
+  min-height: 40px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-cta-bg);
+  color: var(--color-cta-text);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.gsw-signin-btn:hover {
+  background: var(--color-cta-bg-hover);
+  color: var(--color-cta-text);
+}
+
+.gsw-guest-btn {
+  width: 100%;
+  padding: var(--spacing-2);
+  min-height: 34px;
+  margin-top: var(--spacing-2);
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  font-family: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.gsw-guest-btn:hover {
+  color: var(--color-text-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gsw-overlay,
+  .gsw-card {
+    animation: none;
+  }
+}

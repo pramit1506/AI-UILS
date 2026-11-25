@@ -9,6 +9,7 @@ from app.schemas.memory import ClarificationState
 class IntentOutput(BaseModel):
     intent: str
     confidence: float = 1.0
+    search_query: Optional[str] = None
 
 
 
@@ -18,6 +19,7 @@ class ToolSelectionOutput(BaseModel):
 
 
 class GraphState(TypedDict):
+    action: str
     log_draft: Optional[DynamicLogDraft]
     changed_fields: Optional[List[str]]
     draft_status: Optional[str]
@@ -38,6 +40,7 @@ class GraphState(TypedDict):
     decision_output: Optional[DecisionOutput]
     current_agent_state: Optional[AgentState]
     llm_response: Optional[str]
+    extraction_used_fallback: bool
     metadata: Dict[str, Any]
     model_name: str
     conversation_status: Optional[ConversationStatus]

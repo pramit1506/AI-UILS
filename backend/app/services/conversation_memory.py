@@ -1,6 +1,7 @@
 from typing import List, Optional, Dict, Any
 from app.schemas.memory import ConversationSummary, ConversationMetadata, Message, ResolvedContext
 from app.repositories.conversation_repository import conversation_repository
+from app.core.config import settings
 from app.llm.factory import get_llm_provider
 from app.prompts.loader import load_prompt
 from loguru import logger
@@ -30,7 +31,7 @@ class ConversationMemoryService:
     async def get_recent_messages(self, conversation_id: str, limit: int = 5) -> List[Message]:
         return await self.repo.get_messages(conversation_id, limit=limit)
 
-    async def append_message(self, conversation_id: str, role: str, content: str) -> None:
+    async def append_message(self, conversation_id: str, role: str, content: str, *, allow_compression: bool = True) -> None:
         msg = Message(role=role, content=content)
         await self.repo.append_message(conversation_id, msg)
         
@@ -42,7 +43,7 @@ class ConversationMemoryService:
         await self.save_metadata(conversation_id, metadata)
         
         # Check compression thresholds
-        if metadata.message_count >= SUMMARY_AFTER_MESSAGES or metadata.estimated_tokens > MAX_CONTEXT_TOKENS:
+        if allow_compression and (metadata.message_count >= SUMMARY_AFTER_MESSAGES or metadata.estimated_tokens > MAX_CONTEXT_TOKENS):
             await self.compress_history(conversation_id)
 
     async def compress_history(self, conversation_id: str) -> None:
@@ -65,6 +66,7 @@ class ConversationMemoryService:
         try:
             new_summary = await llm.generate_structured(
                 messages=[{"role": "user", "content": prompt_text}],
+                model="fast-router" if settings.LLM_PROVIDER.lower().strip() == "multi" else None,
                 schema=ConversationSummary
             )
             await self.repo.save_summary(conversation_id, new_summary)

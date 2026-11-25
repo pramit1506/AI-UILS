@@ -18,8 +18,6 @@ class ClarificationState(BaseModel):
     status: ClarificationLifecycle = Field(ClarificationLifecycle.CREATED, description="Lifecycle status of this clarification")
 
 class ConversationSummary(BaseModel):
-    active_customers: List[str] = Field(default_factory=list)
-    hospitals: List[str] = Field(default_factory=list)
     past_logs: List[str] = Field(default_factory=list)
     pending_work: List[str] = Field(default_factory=list)
     resolved_clarifications: List[str] = Field(default_factory=list)
@@ -27,8 +25,6 @@ class ConversationSummary(BaseModel):
     last_updated: datetime = Field(default_factory=get_utc_now)
 
     @field_validator(
-        "active_customers",
-        "hospitals",
         "past_logs",
         "pending_work",
         "resolved_clarifications",
@@ -46,8 +42,6 @@ class ConversationSummary(BaseModel):
         ]
 
 class ConversationMetadata(BaseModel):
-    active_customer: Optional[str] = None
-    active_hospital: Optional[str] = None
     active_log: Optional[str] = None
     active_log_id: Optional[str] = None
     last_tool: Optional[str] = None

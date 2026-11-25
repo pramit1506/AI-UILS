@@ -1,10 +1,12 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, Text, DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Computed, DDL, ForeignKey, Index, String, Text, event
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
+from sqlalchemy.orm import Mapped, column_property, mapped_column, relationship
 from app.database.base import Base
 from app.database.mixins import UUIDMixin, TimestampMixin
+from app.database.identifier_prefixes import PREFIXES_DDL, PREFIX_EXPRESSION
+from app.database.search_v1 import JSON_TEXT_DDL, SEARCH_EXPRESSION, TOKENIZER_DDL
 
 
 class LogRecord(UUIDMixin, TimestampMixin, Base):
@@ -13,6 +15,10 @@ class LogRecord(UUIDMixin, TimestampMixin, Base):
     Stores extracted fields as a flexible JSONB blob alongside schema metadata.
     """
     __tablename__ = "log_record"
+    __table_args__ = (
+        Index("ix_log_record_search_terms", "search_terms", postgresql_using="gin"),
+        Index("ix_log_record_owner_created_id", "user_id", "created_at", "id"),
+    )
 
     # Schema / domain identification
     schema_name: Mapped[str] = mapped_column(String(100), index=True)
@@ -35,6 +41,16 @@ class LogRecord(UUIDMixin, TimestampMixin, Base):
 
     # Source of the information (e.g. "pdf", "text", "email")
     source: Mapped[str | None] = mapped_column(String(50))
+    source_filename: Mapped[str | None] = mapped_column(Text)
+    source_text: Mapped[str | None] = mapped_column(Text, deferred=True)
+    has_source_text: Mapped[bool] = column_property(source_text.is_not(None))
+    search_terms: Mapped[list[str] | None] = mapped_column(
+        ARRAY(Text), Computed(SEARCH_EXPRESSION, persisted=True), deferred=True
+    )
+
+    search_prefixes: Mapped[list[str] | None] = mapped_column(
+        ARRAY(Text), Computed(PREFIX_EXPRESSION, persisted=True), deferred=True
+    )
 
     # Conversation that created this log
     conversation_id: Mapped[str | None] = mapped_column(String(100), index=True)
@@ -44,3 +60,8 @@ class LogRecord(UUIDMixin, TimestampMixin, Base):
 
     # Relationship back to User
     user = relationship("User", back_populates="logs", foreign_keys=[user_id])
+
+
+event.listen(LogRecord.__table__, "before_create", DDL(TOKENIZER_DDL))
+event.listen(LogRecord.__table__, "before_create", DDL(JSON_TEXT_DDL))
+event.listen(LogRecord.__table__, "before_create", DDL(PREFIXES_DDL))

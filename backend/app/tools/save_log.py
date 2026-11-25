@@ -76,16 +76,36 @@ class SaveLogTool(BaseTool):
         log_reference = f"LOG-{uuid.uuid4().hex[:8].upper()}"
         schema_name = kwargs["schema_name"]
         fields = kwargs.get("fields") or {}
-        field_metadata = kwargs.get("field_metadata") or {}
+        field_metadata = {k: v for k, v in (kwargs.get("field_metadata") or {}).items()
+                          if k not in context.excluded_fields}
 
         non_empty_fields = {
             k: v for k, v in fields.items()
-            if not k.startswith("_") and v is not None and v != "" and v != []
+            if k not in context.excluded_fields and not k.startswith("_") and v is not None and v != "" and v != []
         }
         if not non_empty_fields:
             return {
                 "status": "error",
                 "message": "Cannot save log: No extracted data fields found. Please provide document content first.",
+            }
+
+        # Guest wall: unauthenticated visitors can chat and draft freely, but
+        # records may only be written to a signed-in account (user-scoped DB
+        # rows). Returning a structured error here makes the AI explain the
+        # wall in chat, and the frontend raises its own "login to save"
+        # modal so the guest is never left with a silent failure. (Checked
+        # AFTER the empty-fields case: an empty draft is a drafting problem,
+        # not an auth problem.)
+        if not context.current_user:
+            return {
+                "status": "error",
+                "login_required": True,
+                "message": (
+                    "Login required to save. As a guest you can draft and verify "
+                    "information, but records can only be stored to a signed-in "
+                    "account. Sign in to keep this log — otherwise everything you "
+                    "captured will be discarded when you leave the page."
+                ),
             }
 
         overall_confidence = None
@@ -112,12 +132,17 @@ class SaveLogTool(BaseTool):
                 schema_name=schema_name,
                 domain=kwargs.get("domain"),
                 log_reference=log_reference,
-                data=jsonable_encoder(fields),
+                # Persist only the cleaned public fields — internal keys
+                # (`_source`, `_raw_text`, …) previously leaked into the
+                # stored JSONB and crossed the API boundary via LogRecordRead.
+                data=jsonable_encoder(non_empty_fields),
                 field_metadata=jsonable_encoder(field_metadata),
                 summary=kwargs.get("summary"),
                 source=kwargs.get("source"),
+                source_filename=context.source_filename,
+                source_text=context.source_text,
                 conversation_id=context.conversation_id,
-                user_id=context.current_user.id if context.current_user else None,
+                user_id=context.current_user.id,
                 requires_review=requires_review,
                 overall_confidence=overall_confidence,
             ),

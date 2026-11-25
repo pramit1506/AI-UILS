@@ -14,7 +14,7 @@ export interface MappedConversation {
 
 export const conversationMapper = {
   mapResponse(response: ConversationResponse): MappedConversation {
-    const legacyResponse = response as any;
+    const legacyResponse = response as ConversationResponse & { response?: string; tool_executions?: ToolExecutionEvent[] };
     const assistantMessage = response.assistant_message || legacyResponse.response || '';
     const logDraft = response.log_draft || null;
     const draftChanges = response.draft_changes || [];
@@ -40,7 +40,6 @@ export const conversationMapper = {
           response.decision_output?.clarification_message ||
           clarificationState.clarification_reason ||
           fallbackQuestion,
-        options: [],
         field_name: missingField,
       };
     }
@@ -51,7 +50,10 @@ export const conversationMapper = {
       const status = statusStr === 'success' ? 'success' : 'error';
 
       toolExecution = {
-        tool_name: response.conversation_metadata?.last_tool || response.decision_output?.selected_tool || 'System Tool',
+        // Prefer the backend-provided tool name (exact); fall back to
+        // metadata/decision inference for older responses.
+        tool_name: response.tool_execution_result.tool_name ||
+          response.conversation_metadata?.last_tool || response.decision_output?.selected_tool || 'System Tool',
         status: status as 'success' | 'error',
         result: response.tool_execution_result.success_message || response.tool_execution_result.created_resource_id,
         error: response.tool_execution_result.validation_warnings?.length

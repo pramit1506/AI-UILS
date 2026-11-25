@@ -28,7 +28,8 @@ export interface RegisterCredentials {
   full_name?: string;
   bio?: string;
   avatar_url?: string;
-  role?: string;
+  // NOTE: `role` removed — roles are assigned server-side only. Previously the
+  // client-supplied role was persisted verbatim, allowing self-escalation.
 }
 
 export interface ProfileUpdatePayload {
@@ -39,11 +40,6 @@ export interface ProfileUpdatePayload {
 }
 
 export interface PasswordResetCredentials {
-  login: string;
+  current_password: string;
   new_password: string;
-}
-
-export interface AccountDeletePayload {
-  email: string;
-  confirm_text?: string;
 }

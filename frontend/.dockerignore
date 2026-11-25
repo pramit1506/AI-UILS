@@ -1,0 +1,25 @@
+# Build context hygiene — keep secrets and local artifacts out of image layers.
+node_modules
+dist
+.vite
+.eslintcache
+.env
+.env.*
+*.env
+*.env.*
+!.env.example
+.npmrc
+.netrc
+*.pem
+*.key
+credentials.json
+token.json
+secrets/
+.pytest_cache/
+tests
+test_output.txt
+*.log
+.git
+.gitignore
+Dockerfile
+.dockerignore

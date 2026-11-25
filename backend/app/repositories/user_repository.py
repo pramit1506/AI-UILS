@@ -77,6 +77,10 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
     ) -> User:
         """Update a user's hashed password."""
         user.hashed_password = hashed_password
+        user.session_version = (user.session_version or 0) + 1
+        user.recovery_digest = None
+        user.recovery_expires = None
+        user.recovery_attempts = 0
         db.add(user)
         await db.commit()
         await db.refresh(user)

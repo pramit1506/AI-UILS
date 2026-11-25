@@ -7,7 +7,6 @@ import {
   Lock,
   User as UserIcon,
   Shield,
-  Briefcase,
   AlertCircle,
   Eye,
   EyeOff,
@@ -24,42 +23,55 @@ import {
   loginUser,
   registerUser,
   resetPassword,
-  deleteAccountByEmail,
   clearAuthError,
   AuthModalTab,
 } from '../../redux/authSlice';
 import './AuthModal.css';
+import { RecoveryForm } from './RecoveryForm';
 
-const DEMO_ACCOUNTS = [
-  {
-    name: 'Dr. Jane Smith',
-    role: 'Quality Assurance Lead',
-    username: 'dr_smith',
-    email: 'jane.smith@pharma-qms.io',
-    password: 'password123',
-    bio: 'Lead Quality & Compliance Specialist with 10+ years QMS experience.',
-  },
-  {
-    name: 'Alex Rivera',
-    role: 'Compliance Officer',
-    username: 'alex_rivera',
-    email: 'alex.rivera@audit-corp.com',
-    password: 'password123',
-    bio: 'Regulatory Affairs & Pharmacovigilance Auditor.',
-  },
-  {
-    name: 'Sarah Connor',
-    role: 'Operations Director',
-    username: 'sarah_c',
-    email: 'sarah.c@manufacturing.org',
-    password: 'password123',
-    bio: 'Plant Operations & Batch Intake Director.',
-  },
-];
+/*
+// Demo accounts contain publicly-known credentials — never include them in
+// production builds. (Previously hardcoded plaintext passwords shipped in the
+// production bundle.)
+//
+// Presentation label: "Trial account and data" — these seeded accounts ship
+// with sample data so visitors can explore the product without signing up.
+*/
+const DEMO_ACCOUNTS = import.meta.env.DEV
+  ? [
+      {
+        name: 'Dr. Jane Smith',
+        kind: 'Trial account with sample data',
+        role: 'Quality Assurance Lead',
+        username: 'dr_smith',
+        email: 'jane.smith@example.com',
+        password: 'password123',
+        bio: 'Sample account for guided product tours.',
+      },
+      {
+        name: 'Alex Rivera',
+        kind: 'Trial account with sample data',
+        role: 'Compliance Officer',
+        username: 'alex_rivera',
+        email: 'alex.rivera@example.com',
+        password: 'password123',
+        bio: 'Sample account showing role-based profile fields.',
+      },
+      {
+        name: 'Sarah Connor',
+        kind: 'Trial account with sample data',
+        role: 'Operations Director',
+        username: 'sarah_c',
+        email: 'sarah.c@example.com',
+        password: 'password123',
+        bio: 'Sample account for multi-user tour scenarios.',
+      },
+    ]
+  : [];
 
 export const AuthModal: React.FC = () => {
   const dispatch = useAppDispatch();
-  const { isAuthModalOpen, authModalTab, loading, error, successMessage } = useAppSelector(
+  const { isAuthModalOpen, authModalTab, loading, error, successMessage, isAuthenticated } = useAppSelector(
     (state) => state.auth
   );
 
@@ -73,20 +85,15 @@ export const AuthModal: React.FC = () => {
   const [regUsername, setRegUsername] = useState('');
   const [regFullName, setRegFullName] = useState('');
   const [regPassword, setRegPassword] = useState('');
-  const [regRole, setRegRole] = useState('Quality Assurance');
   const [regBio, setRegBio] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
 
-  // Password Reset fields
-  const [resetLogin, setResetLogin] = useState('');
+  // Password change fields (requires an authenticated session)
+  const [resetCurrentPassword, setResetCurrentPassword] = useState('');
   const [resetNewPassword, setResetNewPassword] = useState('');
   const [resetConfirmPassword, setResetConfirmPassword] = useState('');
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [resetValidationErr, setResetValidationErr] = useState<string | null>(null);
-
-  // Delete Account (Recovery) fields
-  const [deleteEmail, setDeleteEmail] = useState('');
-  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   if (!isAuthModalOpen) return null;
 
@@ -97,12 +104,6 @@ export const AuthModal: React.FC = () => {
   const handleTabChange = (tab: AuthModalTab) => {
     dispatch(clearAuthError());
     setResetValidationErr(null);
-    if (tab === 'reset-password') {
-      // Auto-prefill reset identifier from login or register input if available
-      setResetLogin((loginInput.trim() || regEmail.trim() || '').toLowerCase());
-    } else if (tab === 'delete-account') {
-      setDeleteEmail((regEmail.trim() || loginInput.trim() || '').toLowerCase());
-    }
     dispatch(setAuthModalTab(tab));
   };
 
@@ -121,7 +122,6 @@ export const AuthModal: React.FC = () => {
         username: regUsername.trim(),
         full_name: regFullName.trim() || undefined,
         password: regPassword,
-        role: regRole,
         bio: regBio.trim() || undefined,
       })
     );
@@ -131,8 +131,9 @@ export const AuthModal: React.FC = () => {
     e.preventDefault();
     setResetValidationErr(null);
 
-    if (!resetLogin.trim()) {
-      setResetValidationErr('Please enter your email or username.');
+    if (!isAuthenticated) return; // Form is not rendered in this state
+    if (!resetCurrentPassword) {
+      setResetValidationErr('Please enter your current password.');
       return;
     }
     if (resetNewPassword.length < 6) {
@@ -144,48 +145,23 @@ export const AuthModal: React.FC = () => {
       return;
     }
 
+    // Security: the backend requires a valid session + the current password.
+    // The old flow ("email + new password" with no verification) allowed
+    // anyone who knew a username to take over the account.
     dispatch(
       resetPassword({
-        login: resetLogin.trim(),
+        current_password: resetCurrentPassword,
         new_password: resetNewPassword,
-      })
-    );
-  };
-
-  const handleDeleteRecoverySubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!deleteEmail.trim()) return;
-    if (deleteConfirmText.trim().toUpperCase() !== 'DELETE') return;
-
-    dispatch(
-      deleteAccountByEmail({
-        email: deleteEmail.trim(),
-        confirm_text: 'DELETE',
       })
     );
   };
 
   const handleSelectDemoProfile = async (profile: typeof DEMO_ACCOUNTS[0]) => {
     dispatch(clearAuthError());
-    try {
-      const loginAction = await dispatch(
-        loginUser({ login: profile.username, password: profile.password })
-      );
-      if (loginUser.rejected.match(loginAction)) {
-        await dispatch(
-          registerUser({
-            email: profile.email,
-            username: profile.username,
-            full_name: profile.name,
-            password: profile.password,
-            role: profile.role,
-            bio: profile.bio,
-          })
-        );
-      }
-    } catch {
-      // Handled by Redux
-    }
+    // Dev helper only: sign in with the pre-seeded demo account. The previous
+    // auto-register fallback silently created real database rows from the
+    // bundled credentials — removed to prevent unintended account creation.
+    dispatch(loginUser({ login: profile.username, password: profile.password }));
   };
 
   const getHeaderTitle = () => {
@@ -195,9 +171,9 @@ export const AuthModal: React.FC = () => {
       case 'register':
         return 'Create Your Account';
       case 'reset-password':
-        return 'Reset Password';
+        return isAuthenticated ? 'Change Password' : 'Reset your password';
       case 'delete-account':
-        return 'Delete / Wipe Account';
+        return 'Delete Account';
       default:
         return 'Authentication';
     }
@@ -210,9 +186,11 @@ export const AuthModal: React.FC = () => {
       case 'register':
         return 'Start capturing and verifying logs with your private profile';
       case 'reset-password':
-        return 'Set a new password for your registered email or username';
+        return isAuthenticated
+          ? 'Verify your current password, then choose a new one'
+          : 'Use the email address associated with your account';
       case 'delete-account':
-        return 'Permanently remove an orphaned account to unblock registration';
+        return 'Account deletion requires signing in — it is done from your profile';
       default:
         return '';
     }
@@ -309,7 +287,7 @@ export const AuthModal: React.FC = () => {
                   id="login-username"
                   type="text"
                   className="auth-input"
-                  placeholder="e.g. dr_smith or name@company.com"
+                  placeholder="e.g. dr_smith or name@example.com"
                   value={loginInput}
                   onChange={(e) => setLoginInput(e.target.value)}
                   required
@@ -397,7 +375,7 @@ export const AuthModal: React.FC = () => {
                   id="reg-email"
                   type="email"
                   className="auth-input"
-                  placeholder="name@company.com"
+                  placeholder="name@example.com"
                   value={regEmail}
                   onChange={(e) => setRegEmail(e.target.value)}
                   required
@@ -435,27 +413,6 @@ export const AuthModal: React.FC = () => {
                   value={regFullName}
                   onChange={(e) => setRegFullName(e.target.value)}
                 />
-              </div>
-            </div>
-
-            <div className="auth-form-group">
-              <label htmlFor="reg-role">Role / Department</label>
-              <div className="auth-input-wrapper">
-                <Briefcase size={14} className="auth-input-icon" />
-                <select
-                  id="reg-role"
-                  className="auth-select"
-                  value={regRole}
-                  onChange={(e) => setRegRole(e.target.value)}
-                >
-                  <option value="Quality Assurance">Quality Assurance</option>
-                  <option value="Compliance Officer">Compliance Officer</option>
-                  <option value="Pharmacovigilance">Pharmacovigilance</option>
-                  <option value="Medical & Health">Medical & Health</option>
-                  <option value="Finance & Accounting">Finance & Accounting</option>
-                  <option value="Operations">Operations</option>
-                  <option value="General Auditor">General Auditor</option>
-                </select>
               </div>
             </div>
 
@@ -506,8 +463,9 @@ export const AuthModal: React.FC = () => {
           </form>
         )}
 
-        {/* Reset Password Form */}
-        {authModalTab === 'reset-password' && (
+        {/* Change Password Form — authenticated users only */}
+        {authModalTab === 'reset-password' && !isAuthenticated && <RecoveryForm onLogin={() => handleTabChange('login')} />}
+        {authModalTab === 'reset-password' && isAuthenticated && (
           <form className="auth-form" onSubmit={handleResetSubmit}>
             {(error || resetValidationErr) && (
               <div className="auth-error-banner">
@@ -517,16 +475,17 @@ export const AuthModal: React.FC = () => {
             )}
 
             <div className="auth-form-group">
-              <label htmlFor="reset-login">Registered Email or Username *</label>
+              <label htmlFor="reset-current-password">Current Password *</label>
               <div className="auth-input-wrapper">
-                <Mail size={14} className="auth-input-icon" />
+                <Lock size={14} className="auth-input-icon" />
                 <input
-                  id="reset-login"
-                  type="text"
+                  id="reset-current-password"
+                  type="password"
                   className="auth-input"
-                  placeholder="e.g. dr_smith@pharma-qms.io or username"
-                  value={resetLogin}
-                  onChange={(e) => setResetLogin(e.target.value)}
+                  placeholder="Enter your current password"
+                  value={resetCurrentPassword}
+                  onChange={(e) => setResetCurrentPassword(e.target.value)}
+                  autoComplete="current-password"
                   required
                   autoFocus
                 />
@@ -545,6 +504,7 @@ export const AuthModal: React.FC = () => {
                   value={resetNewPassword}
                   onChange={(e) => setResetNewPassword(e.target.value)}
                   minLength={6}
+                  autoComplete="new-password"
                   required
                 />
                 <button
@@ -570,6 +530,7 @@ export const AuthModal: React.FC = () => {
                   value={resetConfirmPassword}
                   onChange={(e) => setResetConfirmPassword(e.target.value)}
                   minLength={6}
+                  autoComplete="new-password"
                   required
                 />
               </div>
@@ -577,7 +538,7 @@ export const AuthModal: React.FC = () => {
 
             <button type="submit" className="auth-submit-btn" disabled={loading}>
               <KeyRound size={15} />
-              <span>{loading ? 'Updating Password…' : 'Reset Password & Sign In'}</span>
+              <span>{loading ? 'Updating Password…' : 'Update Password'}</span>
             </button>
 
             <div className="auth-form-footer">
@@ -589,20 +550,15 @@ export const AuthModal: React.FC = () => {
                 <ArrowLeft size={12} style={{ display: 'inline', marginRight: 4 }} />
                 Back to Sign In
               </button>
-              <button
-                type="button"
-                className="auth-link-btn danger"
-                onClick={() => handleTabChange('delete-account')}
-              >
-                Wipe / Delete Account instead
-              </button>
             </div>
           </form>
         )}
 
-        {/* Delete Account (Recovery) Form */}
+        {/* Delete Account — notice only (deletion requires an authenticated
+            DELETE /auth/account call; the old unauthenticated by-email form was
+            a critical vulnerability and was removed) */}
         {authModalTab === 'delete-account' && (
-          <form className="auth-form" onSubmit={handleDeleteRecoverySubmit}>
+          <div className="auth-form">
             {error && (
               <div className="auth-error-banner">
                 <AlertCircle size={14} />
@@ -613,54 +569,14 @@ export const AuthModal: React.FC = () => {
             <div className="auth-recovery-notice">
               <Trash2 size={16} className="auth-notice-icon" />
               <div>
-                <strong>Account Purge & Recovery</strong>
+                <strong>Sign in required</strong>
                 <p>
-                  Permanently remove the registered account from the database. This allows you to recreate your account cleanly.
+                  Accounts can only be deleted by their owner while signed in.
+                  Once authenticated, use <strong>Profile → Delete Account</strong> to
+                  permanently remove your account and all of its logs.
                 </p>
               </div>
             </div>
-
-            <div className="auth-form-group">
-              <label htmlFor="del-email">Registered Email to Purge *</label>
-              <div className="auth-input-wrapper">
-                <Mail size={14} className="auth-input-icon" />
-                <input
-                  id="del-email"
-                  type="email"
-                  className="auth-input"
-                  placeholder="e.g. dr_smith@pharma-qms.io"
-                  value={deleteEmail}
-                  onChange={(e) => setDeleteEmail(e.target.value)}
-                  required
-                  autoFocus
-                />
-              </div>
-            </div>
-
-            <div className="auth-form-group">
-              <label htmlFor="del-confirm">Type <strong>DELETE</strong> to confirm *</label>
-              <div className="auth-input-wrapper">
-                <input
-                  id="del-confirm"
-                  type="text"
-                  className="auth-input"
-                  placeholder="DELETE"
-                  value={deleteConfirmText}
-                  onChange={(e) => setDeleteConfirmText(e.target.value)}
-                  required
-                  style={{ paddingLeft: '0.75rem', letterSpacing: '0.05em' }}
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              className="auth-submit-btn danger"
-              disabled={loading || deleteConfirmText.trim().toUpperCase() !== 'DELETE'}
-            >
-              <Trash2 size={15} />
-              <span>{loading ? 'Purging Account…' : 'Permanently Delete Account'}</span>
-            </button>
 
             <div className="auth-form-footer">
               <button
@@ -672,31 +588,34 @@ export const AuthModal: React.FC = () => {
                 Back to Sign In
               </button>
             </div>
-          </form>
+          </div>
         )}
 
-        {/* Demo Quick Switch Section */}
-        <div className="auth-demo-section">
-          <div className="auth-demo-title">
-            <Sparkles size={12} />
-            <span>Instant Demo Accounts</span>
+        {/* Trial account and data — seeded accounts with sample data */}
+        {DEMO_ACCOUNTS.length > 0 && (
+          <div className="auth-demo-section">
+            <div className="auth-demo-title">
+              <Sparkles size={12} />
+              <span>Trial account and data</span>
+            </div>
+            <p className="auth-demo-subtitle">One-click sign-in · pre-seeded with sample records for exploring</p>
+            <div className="auth-demo-pills">
+              {DEMO_ACCOUNTS.map((acc) => (
+                <button
+                  key={acc.username}
+                  type="button"
+                  className="auth-demo-pill-btn"
+                  onClick={() => handleSelectDemoProfile(acc)}
+                  disabled={loading}
+                  title={`Sign in as ${acc.name}`}
+                >
+                  <span className="auth-demo-pill-name">{acc.name}</span>
+                  <span className="auth-demo-pill-role">{acc.role}</span>
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="auth-demo-pills">
-            {DEMO_ACCOUNTS.map((acc) => (
-              <button
-                key={acc.username}
-                type="button"
-                className="auth-demo-pill-btn"
-                onClick={() => handleSelectDemoProfile(acc)}
-                disabled={loading}
-                title={`Sign in or register as ${acc.name}`}
-              >
-                <span className="auth-demo-pill-name">{acc.name}</span>
-                <span className="auth-demo-pill-role">{acc.role}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

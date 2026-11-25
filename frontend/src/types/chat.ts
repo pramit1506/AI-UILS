@@ -11,20 +11,25 @@ export interface ChatMessage {
 }
 
 export interface ChatRequest {
+  action?: 'chat' | 'capture' | 'save_reviewed';
+  excluded_fields?: string[];
   user_message: string;
+  expected_user_id?: string;
   conversation_id?: string;
   message_history: { role: string; content: string }[];
   log_draft?: DynamicLogDraft;
+  source_document?: { filename: string; text?: string };
 }
 
 export interface FieldChange {
   field_name: string;
-  previous_value?: any;
-  current_value?: any;
+  previous_value?: unknown;
+  current_value?: unknown;
   change_type: string;
 }
 
 export interface ConversationResponse {
+  extraction_used_fallback?: boolean;
   assistant_message: string;
   conversation_id: string;
   log_draft?: DynamicLogDraft;

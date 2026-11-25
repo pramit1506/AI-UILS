@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Send, Paperclip, Save, FileText } from 'lucide-react';
+import { Send, Paperclip, FileText } from 'lucide-react';
 import './Chat.css';
 
 interface ChatInputProps {
@@ -13,7 +13,6 @@ interface ChatInputProps {
 export const ChatInput: React.FC<ChatInputProps> = ({
   onSend,
   onFileUpload,
-  onSave,
   hasDraft,
   disabled,
 }) => {
@@ -50,16 +49,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       {/* Quick Action Suggestion Bar when a draft exists */}
       {hasDraft && (
         <div className="chat-quick-actions-bar">
-          <button
-            type="button"
-            className="chat-quick-btn save-pill"
-            onClick={onSave}
-            title="Save and commit this log to database (Ctrl + Enter)"
-          >
-            <Save size={12} />
-            <span>Save Log</span>
-            <kbd>Ctrl+↵</kbd>
-          </button>
           <button
             type="button"
             className="chat-quick-btn"
@@ -104,19 +93,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           disabled={disabled}
           autoComplete="off"
         />
-
-        {hasDraft && (
-          <button
-            type="button"
-            className="chat-input-inline-save"
-            onClick={onSave}
-            title="Save current log record"
-            disabled={disabled}
-          >
-            <Save size={12} />
-            <span>Save</span>
-          </button>
-        )}
 
         <button
           type="submit"

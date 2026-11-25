@@ -1,4 +1,4 @@
-/* ═══════════════════════════════════════════════════════════════
+﻿/* ═══════════════════════════════════════════════════════════════
    CHAT INTERFACE — Modern AI Copilot & Messaging Workspace
    ═══════════════════════════════════════════════════════════════ */
 
@@ -36,15 +36,15 @@
   width: 26px;
   height: 26px;
   border-radius: var(--radius-sm);
-  background: rgba(99, 102, 241, 0.15);
-  border: 1px solid rgba(99, 102, 241, 0.25);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
   color: var(--accent-light);
 }
 
 .chat-header-left h2 {
   font-size: 0.85rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-text-primary);
   letter-spacing: -0.01em;
   margin: 0;
 }
@@ -59,8 +59,8 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  background: rgba(99, 102, 241, 0.12);
-  border: 1px solid rgba(99, 102, 241, 0.25);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
   color: var(--accent-light);
   font-size: 0.68rem;
   font-weight: 600;
@@ -75,32 +75,6 @@
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
-}
-
-.chat-header-save-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1);
-  background: linear-gradient(135deg, #10b981, #059669);
-  color: #fff;
-  border: 1px solid rgba(16, 185, 129, 0.4);
-  border-radius: var(--radius-sm);
-  padding: 0.25rem 0.65rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 1px 4px rgba(16, 185, 129, 0.25);
-  transition: all var(--duration-fast) var(--ease-out);
-}
-
-.chat-header-save-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #34d399, #10b981);
-  transform: translateY(-1px);
-}
-
-.chat-header-save-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* ── Messages Container & List ──────────────────────────────── */
@@ -142,14 +116,14 @@
 }
 
 .chat-avatar.user {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-3);
   border: 1px solid var(--color-glass-border);
   color: var(--color-text-secondary);
 }
 
 .chat-avatar.assistant {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2));
-  border: 1px solid rgba(99, 102, 241, 0.35);
+  background: var(--accent-gradient-subtle);
+  border: 1px solid var(--accent-glow);
   color: var(--accent-light);
 }
 
@@ -174,7 +148,7 @@
 .chat-thinking-accordion {
   display: flex;
   flex-direction: column;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--color-surface-3);
   border: 1px solid var(--color-glass-border);
   border-radius: var(--radius-sm);
   overflow: hidden;
@@ -199,7 +173,7 @@
 
 .chat-thinking-toggle:hover {
   color: var(--accent-light);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-glass);
 }
 
 .chat-thinking-icon {
@@ -212,7 +186,7 @@
   line-height: 1.4;
   color: var(--color-text-tertiary);
   font-family: 'JetBrains Mono', monospace;
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--color-input-sunken);
   border-top: 1px solid var(--color-glass-border);
   white-space: pre-wrap;
   max-height: 200px;
@@ -227,7 +201,7 @@
 }
 
 .chat-message-wrapper.assistant .chat-message-bubble {
-  background: #15161c;
+  background: var(--color-surface-2);
   border: 1px solid var(--color-glass-border);
   color: var(--color-text-primary);
   border-top-left-radius: var(--radius-xs);
@@ -239,8 +213,8 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-3);
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(99, 102, 241, 0.08));
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
   border-radius: var(--radius-md);
   padding: 8px 12px;
   margin-top: 4px;
@@ -259,7 +233,7 @@
   width: 24px;
   height: 24px;
   border-radius: var(--radius-xs);
-  background: rgba(16, 185, 129, 0.15);
+  background: var(--color-success-bg);
   color: var(--color-success-text);
 }
 
@@ -286,13 +260,14 @@
 }
 
 .chat-inline-save-btn:hover {
-  background: #34d399;
+  background: var(--color-cta-bg);
+  color: var(--color-cta-text);
   transform: translateY(-1px);
 }
 
 /* ── Tool Execution Trace Card ──────────────────────────────── */
 .tool-execution-card {
-  background: #111216;
+  background: var(--color-surface-2);
   border: 1px solid var(--color-glass-border);
   border-radius: var(--radius-sm);
   padding: 8px 10px;
@@ -306,21 +281,20 @@
 }
 
 .tool-execution-icon {
-  color: var(--accent-light);
+  color: var(--accent);
 }
 
 .tool-execution-title {
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--color-text-tertiary);
 }
 
 /* ── Clarification Card ─────────────────────────────────────── */
 .clarification-card {
-  background: rgba(245, 158, 11, 0.06);
-  border: 1px solid rgba(245, 158, 11, 0.2);
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
   border-radius: var(--radius-md);
   padding: 10px 12px;
   display: flex;
@@ -351,9 +325,9 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  color: #fff;
+  background: var(--color-glass-hover);
+  border: 1px solid var(--color-warning-border);
+  color: var(--color-text-primary);
   border-radius: var(--radius-xs);
   padding: 0.2rem 0.55rem;
   font-size: 0.72rem;
@@ -362,7 +336,7 @@
 }
 
 .clarification-option-btn:hover {
-  background: rgba(245, 158, 11, 0.15);
+  background: var(--color-warning-bg);
   border-color: var(--color-warning);
 }
 
@@ -405,7 +379,7 @@
 }
 
 .chat-message-save-link:hover {
-  background: rgba(16, 185, 129, 0.12);
+  background: var(--color-success-bg);
 }
 
 .chat-message-copy {
@@ -413,8 +387,8 @@
 }
 
 .chat-message-copy:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-primary);
+  background: var(--color-glass-hover);
 }
 
 /* ── Modern Empty State ─────────────────────────────────────── */
@@ -440,7 +414,7 @@
 .empty-title {
   font-size: 1rem;
   font-weight: 800;
-  color: #fff;
+  color: var(--color-text-primary);
   letter-spacing: -0.02em;
   margin-bottom: var(--spacing-1);
 }
@@ -476,7 +450,7 @@
 
 .empty-card:hover {
   background: var(--color-surface-2);
-  border-color: rgba(99, 102, 241, 0.4);
+  border-color: var(--accent-border);
   transform: translateY(-2px);
 }
 
@@ -487,7 +461,7 @@
   width: 40px;
   height: 40px;
   border-radius: var(--radius-md);
-  background: rgba(99, 102, 241, 0.1);
+  background: var(--accent-subtle);
   color: var(--accent-light);
   margin-bottom: var(--spacing-2);
 }
@@ -495,7 +469,7 @@
 .card-text {
   font-size: 0.8rem;
   font-weight: 600;
-  color: #fff;
+  color: var(--color-text-primary);
 }
 
 .card-hint {
@@ -530,46 +504,28 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-surface-hover);
   border: 1px solid var(--color-glass-border);
-  color: var(--color-text-secondary);
+  color: var(--color-text-tertiary);
   border-radius: var(--radius-full);
-  padding: 0.15rem 0.55rem;
-  font-size: 0.68rem;
-  font-weight: 500;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.7rem;
   cursor: pointer;
   white-space: nowrap;
   transition: all var(--duration-fast) var(--ease-out);
 }
 
 .chat-quick-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-}
-
-.chat-quick-btn.save-pill {
-  background: rgba(16, 185, 129, 0.1);
-  border-color: rgba(16, 185, 129, 0.25);
-  color: var(--color-success-text);
-}
-
-.chat-quick-btn.save-pill:hover {
-  background: rgba(16, 185, 129, 0.2);
-}
-
-.chat-quick-btn kbd {
-  font-size: 0.58rem;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 0.05rem 0.25rem;
-  border-radius: 2px;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border-color: transparent;
 }
 
 .chat-input-form {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--color-input-sunken);
   border: 1px solid var(--color-glass-border-lg);
   border-radius: var(--radius-lg);
   padding: 4px 6px 4px 10px;
@@ -594,15 +550,15 @@
 }
 
 .chat-attach-btn:hover:not(:disabled) {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text-primary);
+  background: var(--color-surface-3);
 }
 
 .chat-input-field {
   flex: 1;
   background: transparent;
   border: none;
-  color: #fff;
+  color: var(--color-text-primary);
   font-size: 0.8rem;
   outline: none;
   min-width: 0;
@@ -610,24 +566,6 @@
 
 .chat-input-field::placeholder {
   color: var(--color-text-muted);
-}
-
-.chat-input-inline-save {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  color: var(--color-success-text);
-  font-size: 0.68rem;
-  font-weight: 600;
-  padding: 0.2rem 0.5rem;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-
-.chat-input-inline-save:hover:not(:disabled) {
-  background: rgba(16, 185, 129, 0.25);
 }
 
 .chat-send-btn {
@@ -658,7 +596,7 @@
 .chat-drop-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(9, 9, 11, 0.85);
+  background: var(--color-scrim);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -676,7 +614,7 @@
   height: 100%;
   border: 2px dashed var(--accent);
   border-radius: var(--radius-xl);
-  background: rgba(99, 102, 241, 0.05);
+  background: var(--accent-subtle);
 }
 
 .chat-drop-icon {
@@ -687,11 +625,28 @@
 .chat-drop-message {
   font-size: 0.9rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-text-primary);
 }
 
 .chat-drop-hint {
   font-size: 0.72rem;
   color: var(--color-text-secondary);
   margin-top: 2px;
+}
+
+/* ── Saved guard state (useSaveLog) — links/cards switch to neutral ✓ ── */
+.chat-message-save-link.saved {
+  color: var(--color-success-text);
+  cursor: default;
+}
+
+/* Inline save card, post-save confirmation */
+.chat-inline-save-card.saved {
+  border-color: var(--color-success-border);
+}
+
+.chat-inline-save-card.saved .chat-inline-save-icon-wrap {
+  color: var(--color-success-text);
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
 }

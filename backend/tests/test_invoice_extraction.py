@@ -9,9 +9,10 @@ from app.core.config import settings
 
 
 def test_invoice_fallback_extraction():
+    """Generic ("Key: Value") deterministic extraction — no domain keyword tables."""
     invoice_text = """Process this uploaded document (sample_invoice_INV-8492.txt):
 
-ACME INDUSTRIAL SUPPLY CORP
+Vendor: ACME INDUSTRIAL SUPPLY CORP
 1044 Innovation Way, Suite 300, Austin, TX 78701
 Phone: (512) 555-0199 | Email: billing@acmesupply.com
 
@@ -22,7 +23,7 @@ Due Date: September 13, 2026
 Payment Terms: Net 30
 
 BILLED TO:
-Apex Logistics & Freight Inc.
+Customer Name: Apex Logistics & Freight Inc.
 Attn: Accounts Payable
 450 Harbor Blvd, Long Beach, CA 90802
 Customer ID: CUST-99214
@@ -45,14 +46,18 @@ Remit To: payments@acmesupply.com"""
 
     extracted, corrections = _fallback_extract_fields(invoice_text)
 
-    assert extracted.get("schema_name") == "Invoice"
-    assert extracted.get("domain") == "Finance"
+    # Document type is intentionally NOT guessed by the fallback — the
+    # clarification flow asks for it when the LLM stage can't infer it.
+    assert "schema_name" not in extracted
+    assert "domain" not in extracted
     assert extracted.get("invoice_number") == "INV-2026-8492"
-    assert "ACME INDUSTRIAL SUPPLY CORP" in (extracted.get("vendor") or extracted.get("vendor_name") or "")
+    assert extracted.get("vendor") == "ACME INDUSTRIAL SUPPLY CORP"
     assert extracted.get("customer_name") == "Apex Logistics & Freight Inc."
-    assert "$8,714.13" in extracted.get("total_amount", "")
+    assert extracted.get("total_amount") == "$8,714.13"
+    assert extracted.get("total_amount_due") == "$8,714.13"
     assert extracted.get("subtotal") == "$8,050.00"
     assert extracted.get("due_date") == "2026-09-13"
+    assert extracted.get("invoice_date") == "2026-08-14"
 
 
 def test_medical_record_fallback_extraction():
@@ -71,10 +76,9 @@ Diagnosis: Mild Sinus Tachycardia and Stage 1 Hypertension"""
 
     extracted, corrections = _fallback_extract_fields(medical_text)
 
-    assert extracted.get("schema_name") == "Medical Record"
-    assert extracted.get("domain") == "Healthcare"
     assert extracted.get("patient_name") == "Sarah Connor"
-    assert extracted.get("doctor_name") == "Dr. Marcus Vance"
+    assert extracted.get("attending_physician") == "Dr. Marcus Vance"
+    assert extracted.get("date_of_visit") == "2026-08-18"
     assert "Mild Sinus Tachycardia" in extracted.get("diagnosis", "")
 
 
@@ -90,9 +94,8 @@ Python, TypeScript, React, PostgreSQL, LangGraph"""
 
     extracted, corrections = _fallback_extract_fields(resume_text)
 
-    assert extracted.get("schema_name") == "Resume"
-    assert extracted.get("domain") == "HR"
     assert extracted.get("candidate_name") == "Alexander Morgan"
+    assert extracted.get("position_applied") == "Lead Systems Architect"
 
 
 def test_complaint_fallback_extraction():
@@ -107,8 +110,7 @@ Pump stopped delivering fluid and triggered error code ERR-402."""
 
     extracted, corrections = _fallback_extract_fields(complaint_text)
 
-    assert extracted.get("schema_name") == "Complaint"
-    assert extracted.get("domain") == "Quality Management"
+    assert extracted.get("complaint_id") == "QC-2026-1092"
     assert extracted.get("product_name") == "Precision IV Infusion Pump Pro"
     assert extracted.get("batch_number") == "LOT-2026-88B"
     assert extracted.get("customer_name") == "St. Jude Medical Center"

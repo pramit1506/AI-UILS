@@ -22,15 +22,30 @@ frontend/.env.*
 *.pfx
 *.p12
 *.kdbx
+*.der
+*.jks
+*.keystore
 id_rsa
 id_rsa.pub
 id_ed25519
 id_ed25519.pub
 credentials.json
+credentials*.local.json
 client_secret*.json
 service-account*.json
 token.json
 tokens.json
+.secrets/
+secrets/
+.aws/
+.azure/
+.gcloud/
+.netrc
+_netrc
+.npmrc
+.pypirc
+.pgpass
+pgpass.conf
 
 # ── Python Virtual Environments ──────────────────────────────────────────────
 .venv/
@@ -110,6 +125,18 @@ frontend/.vite/
 *.db
 *.db3
 *.s3db
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3-journal
+*.db-wal
+*.db-shm
+*.db-journal
+/backend/data/
+/backend/uploads/
+/backend/exports/
 *.dump
 *.sql.dump
 *.pid
@@ -139,6 +166,14 @@ project_structure.txt
 .claude/
 .cursor/
 .windsurf/
+/AUDIT-FIXES-REPORT.md
+/docs/product-review.md
+/docs/sandbox-e2e-report.md
+/artifacts/
+/test-results/
+/playwright-report/
+/screenshots/
+codex-clipboard-*.png
 
 # ── OS Generated Files ───────────────────────────────────────────────────────
 .DS_Store

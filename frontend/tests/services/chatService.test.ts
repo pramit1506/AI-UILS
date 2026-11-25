@@ -11,7 +11,7 @@ vi.mock('../../src/services/api', () => ({
 describe('chatService', () => {
   it('sendMessage should call api post', async () => {
     const mockResponse = { data: { response: 'Hello User', conversation_id: '123' } };
-    (apiClient.post as any).mockResolvedValue(mockResponse);
+    vi.mocked(apiClient.post).mockResolvedValue(mockResponse);
 
     const request = {
       user_message: 'Hi',
@@ -20,7 +20,7 @@ describe('chatService', () => {
 
     const result = await chatService.sendMessage(request);
     
-    expect(apiClient.post).toHaveBeenCalledWith('/chat/', request);
+    expect(apiClient.post).toHaveBeenCalledWith('/chat/', request, { timeout: 130_000 });
     expect(result).toEqual(mockResponse.data);
   });
 });

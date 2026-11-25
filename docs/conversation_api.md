@@ -7,7 +7,7 @@ The AI-First Conversation API provides a unified interface for the frontend Reac
 1. **User sends a message** to `/api/v1/chat/`.
 2. **Backend processes the message** using the LangGraph workflow, maintaining conversation context, parsing intents, updating the draft, and potentially executing tools.
 3. **Backend maps the final state** into a unified `ConversationResponse` contract.
-4. **Frontend renders the response**, natively showing AI text and immediately syncing the structured `interaction_draft` to a visual panel.
+4. **Frontend renders the response**, showing the assistant message and syncing `log_draft` to the review panel.
 
 ## API Schema
 
@@ -17,8 +17,8 @@ The AI-First Conversation API provides a unified interface for the frontend Reac
 
 ```json
 {
-  "user_message": "Log call with Dr. Smith.",
-  "conversation_id": "optional-uuid",
+  "action": "capture",
+  "user_message": "Workshop inspection. Asset: Pump 42.",
   "message_history": []
 }
 ```
@@ -32,18 +32,20 @@ The response guarantees a stable contract; absent sections are simply `null` or 
   "success": true,
   "message": "Chat processed successfully",
   "data": {
-    "assistant_message": "I've started a draft for Dr. Smith.",
+    "assistant_message": "I've started a draft for the workshop inspection.",
     "conversation_id": "c1f8a-...",
     "conversation_status": "COLLECTING_INFORMATION",
     "draft_status": "PARTIAL",
-    "interaction_draft": {
-      "hcp_name": "Dr. Smith"
+    "extraction_used_fallback": false,
+    "log_draft": {
+      "schema_name": "Workshop inspection",
+      "fields": { "asset": "Pump 42" }
     },
     "draft_changes": [
       {
-        "field_name": "hcp_name",
+        "field_name": "asset",
         "previous_value": null,
-        "current_value": "Dr. Smith",
+        "current_value": "Pump 42",
         "change_type": "updated"
       }
     ],
@@ -66,7 +68,7 @@ The response guarantees a stable contract; absent sections are simply `null` or 
 
 The core principle of this API is **Draft Synchronization**.
 - You do not need to fetch the draft separately.
-- Every chat request returns the `interaction_draft` object reflecting the latest immutable updates made by the AI.
+- When a draft is available, the response includes the latest `log_draft`. The `extraction_used_fallback` flag identifies a draft produced by the local fallback on the current turn.
 - `draft_changes` specifies exactly which fields were added, updated, or removed, allowing the frontend to highlight these fields visually to the user.
 
 ## Clarification Workflow

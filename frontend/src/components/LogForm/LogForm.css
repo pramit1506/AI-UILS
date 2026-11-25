@@ -1,4 +1,4 @@
-/* ═══════════════════════════════════════════════════════════════
+﻿/* ═══════════════════════════════════════════════════════════════
    DYNAMIC LOG FORM — Modern Field Verification & Review Studio
    ═══════════════════════════════════════════════════════════════ */
 
@@ -28,8 +28,8 @@
   width: 56px;
   height: 56px;
   border-radius: var(--radius-lg);
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
   color: var(--accent-light);
   margin-bottom: var(--spacing-4);
 }
@@ -37,7 +37,7 @@
 .dlf-empty-title {
   font-size: 0.95rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-text-primary);
   margin-bottom: var(--spacing-2);
 }
 
@@ -70,8 +70,8 @@
   width: 28px;
   height: 28px;
   border-radius: var(--radius-sm);
-  background: rgba(99, 102, 241, 0.12);
-  border: 1px solid rgba(99, 102, 241, 0.25);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
   color: var(--accent-light);
   flex-shrink: 0;
 }
@@ -85,7 +85,7 @@
 .dlf-schema-badge {
   font-size: 0.85rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-text-primary);
   letter-spacing: -0.01em;
 }
 
@@ -107,8 +107,8 @@
 }
 
 .dlf-edit-name-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text-primary);
+  background: var(--color-surface-3);
 }
 
 .dlf-name-editing {
@@ -118,10 +118,10 @@
 }
 
 .dlf-name-input {
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--color-input-sunken);
   border: 1px solid var(--accent);
   border-radius: var(--radius-xs);
-  color: #fff;
+  color: var(--color-text-primary);
   font-size: 0.82rem;
   font-weight: 600;
   padding: 2px 6px;
@@ -141,80 +141,23 @@
 
 .dlf-domain-tag, .dlf-source-tag {
   font-size: 0.62rem;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   padding: 0.1rem 0.4rem;
   border-radius: var(--radius-xs);
 }
 
 .dlf-domain-tag {
-  background: rgba(14, 165, 233, 0.12);
-  color: #38bdf8;
-  border: 1px solid rgba(14, 165, 233, 0.25);
+  color: var(--color-info-text);
+  background: var(--color-info-bg);
+  border: none;
 }
 
 .dlf-source-tag {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--color-text-secondary);
-  border: 1px solid var(--color-glass-border);
-}
-
-.dlf-header-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  margin-left: auto;
-}
-
-.dlf-header-save-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1);
-  background: linear-gradient(135deg, #10b981, #059669);
-  color: #fff;
-  border: 1px solid rgba(16, 185, 129, 0.4);
-  border-radius: var(--radius-sm);
-  padding: 0.25rem 0.65rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 1px 4px rgba(16, 185, 129, 0.25);
-  transition: all var(--duration-fast) var(--ease-out);
-}
-
-.dlf-header-save-btn:hover {
-  background: linear-gradient(135deg, #34d399, #10b981);
-  transform: translateY(-1px);
-}
-
-.dlf-shortcuts-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--color-glass-border);
-  color: var(--color-text-secondary);
-  border-radius: var(--radius-sm);
-  padding: 0.25rem 0.55rem;
-  font-size: 0.72rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
-}
-
-.dlf-shortcuts-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.dlf-shortcuts-btn kbd {
-  font-size: 0.62rem;
-  padding: 0.05rem 0.3rem;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 2px;
-  color: var(--color-text-tertiary);
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
 }
 
 .dlf-session-info {
@@ -240,14 +183,14 @@
 
 .dlf-progress-bar-bg {
   height: 4px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--color-glass-hover);
   border-radius: var(--radius-full);
   overflow: hidden;
 }
 
 .dlf-progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #6366f1, #10b981);
+  background: var(--accent-gradient);
   border-radius: var(--radius-full);
   transition: width 300ms var(--ease-out);
 }
@@ -282,7 +225,6 @@
   border-bottom: 1px solid var(--color-glass-border);
   flex-shrink: 0;
 }
-
 .dlf-bulk-actions {
   display: flex;
   align-items: center;
@@ -294,10 +236,10 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 0.2rem 0.5rem;
+  padding: 0.25rem 0.6rem;
   border-radius: var(--radius-xs);
   font-size: 0.7rem;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-out);
   border: 1px solid transparent;
@@ -305,41 +247,40 @@
 
 .dlf-bulk-btn kbd {
   font-size: 0.6rem;
-  padding: 0.05rem 0.25rem;
+  padding: 0 0.25rem;
   border-radius: 2px;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--color-surface-hover);
 }
 
 .bulk-approve {
-  background: rgba(16, 185, 129, 0.12);
+  background: var(--color-success-bg);
   color: var(--color-success-text);
-  border-color: rgba(16, 185, 129, 0.25);
+  border-color: transparent;
 }
-.bulk-approve:hover { background: rgba(16, 185, 129, 0.22); }
+.bulk-approve:hover { background: var(--color-success-bg); }
 
 .bulk-high-conf {
-  background: rgba(99, 102, 241, 0.12);
-  color: var(--accent-light);
-  border-color: rgba(99, 102, 241, 0.25);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border-color: transparent;
 }
-.bulk-high-conf:hover { background: rgba(99, 102, 241, 0.22); }
+.bulk-high-conf:hover { background: var(--accent-subtle); }
 
 .bulk-reject {
-  background: rgba(244, 63, 94, 0.1);
+  background: var(--color-error-bg);
   color: var(--color-error-text);
-  border-color: rgba(244, 63, 94, 0.2);
+  border-color: transparent;
 }
-.bulk-reject:hover { background: rgba(244, 63, 94, 0.2); }
+.bulk-reject:hover { background: var(--color-error-bg); }
 
 .bulk-reset {
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--color-text-secondary);
-  border-color: var(--color-glass-border);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  border-color: transparent;
 }
 .bulk-reset:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
 }
 
 .dlf-filter-tabs {
@@ -351,7 +292,7 @@
 .dlf-tab {
   background: transparent;
   border: none;
-  color: var(--color-text-secondary);
+  color: var(--color-text-tertiary);
   font-size: 0.72rem;
   font-weight: 500;
   padding: 0.15rem 0.5rem;
@@ -362,12 +303,12 @@
 
 .dlf-tab:hover {
   color: var(--color-text-primary);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-surface-hover);
 }
 
 .dlf-tab.active {
-  color: #fff;
-  background: var(--color-surface-3);
+  color: var(--accent);
+  background: var(--accent-subtle);
   font-weight: 600;
 }
 
@@ -389,7 +330,7 @@
 }
 
 .dlf-field {
-  background: #141519;
+  background: var(--color-surface-2);
   border: 1px solid var(--color-glass-border);
   border-radius: var(--radius-md);
   padding: var(--spacing-3);
@@ -397,16 +338,21 @@
   cursor: pointer;
   position: relative;
   overflow: hidden;
+  /* Critical: `overflow: hidden` zeroes this card's automatic flex minimum
+     size, so inside the fixed-height .dlf-fields flex column every card
+     compressed to fit instead of overflowing — labels/values were clipped and
+     the list never scrolled. Cards must keep their natural height. */
+  flex-shrink: 0;
 }
 
 .dlf-field:hover {
   border-color: var(--color-glass-border-lg);
-  background: #171920;
+  background: var(--color-surface-2);
 }
 
 .dlf-field.dlf-field-active {
   border-color: var(--accent);
-  background: #191b24;
+  background: var(--color-surface-2);
   box-shadow: 0 0 0 1px var(--accent), 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
@@ -432,16 +378,22 @@
 
 .dlf-field-header {
   display: flex;
+  /* Badges wrap to a second line instead of squeezing/cutting the label
+     ("Invoice Number" etc. were clipped in narrow cards). */
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-2);
   margin-bottom: 6px;
+  min-height: 26px;
 }
 
 .dlf-field-label-group {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .dlf-field-label {
@@ -449,15 +401,19 @@
   font-weight: 600;
   color: var(--color-text-secondary);
   text-transform: capitalize;
+  line-height: 1.35;
+  word-break: break-word;
 }
 
 .dlf-field.dlf-field-active .dlf-field-label {
-  color: #fff;
+  color: var(--accent);
 }
 
 .dlf-field-meta-badges {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 4px;
 }
 
@@ -468,8 +424,11 @@
   gap: 3px;
   font-size: 0.65rem;
   font-weight: 600;
-  padding: 0.05rem 0.35rem;
+  padding: 0.12rem 0.38rem;
+  min-height: 18px;
+  line-height: 1;
   border-radius: 3px;
+  white-space: nowrap;
 }
 
 .dlf-conf-dot {
@@ -480,19 +439,19 @@
 
 .confidence-high {
   color: var(--color-success-text);
-  background: rgba(16, 185, 129, 0.1);
+  background: var(--color-success-bg);
 }
 .confidence-high .dlf-conf-dot { background: var(--color-success); }
 
 .confidence-med {
   color: var(--color-warning-text);
-  background: rgba(245, 158, 11, 0.1);
+  background: var(--color-warning-bg);
 }
 .confidence-med .dlf-conf-dot { background: var(--color-warning); }
 
 .confidence-low {
   color: var(--color-error-text);
-  background: rgba(244, 63, 94, 0.1);
+  background: var(--color-error-bg);
 }
 .confidence-low .dlf-conf-dot { background: var(--color-error); }
 
@@ -503,31 +462,34 @@
   gap: 3px;
   font-size: 0.65rem;
   font-weight: 600;
-  padding: 0.05rem 0.4rem;
+  padding: 0.12rem 0.4rem;
+  min-height: 18px;
+  line-height: 1;
   border-radius: 3px;
   text-transform: capitalize;
+  white-space: nowrap;
 }
 
 .status-approved {
-  background: rgba(16, 185, 129, 0.12);
+  background: var(--color-success-bg);
   color: var(--color-success-text);
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  border: 1px solid var(--color-success-border);
 }
 
 .status-rejected {
-  background: rgba(244, 63, 94, 0.12);
+  background: var(--color-error-bg);
   color: var(--color-error-text);
-  border: 1px solid rgba(244, 63, 94, 0.25);
+  border: 1px solid var(--color-error-border);
 }
 
 .status-edited {
-  background: rgba(99, 102, 241, 0.12);
+  background: var(--accent-subtle);
   color: var(--accent-light);
-  border: 1px solid rgba(99, 102, 241, 0.25);
+  border: 1px solid var(--accent-border);
 }
 
 .status-pending {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-glass-hover);
   color: var(--color-text-muted);
   border: 1px solid var(--color-glass-border);
 }
@@ -557,10 +519,10 @@
 
 .dlf-inline-input {
   flex: 1;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--color-input-sunken);
   border: 1px solid var(--accent);
   border-radius: var(--radius-xs);
-  color: #fff;
+  color: var(--color-text-primary);
   font-size: 0.8rem;
   padding: 4px 8px;
   outline: none;
@@ -583,7 +545,7 @@
 }
 
 .dlf-editor-btn.cancel {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-surface-3);
   color: var(--color-text-secondary);
 }
 
@@ -591,60 +553,67 @@
 .dlf-field-actions-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 2px;
   padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-top: 1px solid var(--color-glass-hover);
 }
 
+/* Quiet ghost actions: no boxed chrome — hover reveals intent color.
+   Approve/Reject selected keep their tinted state so review status is visible. */
 .dlf-action-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 3px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--color-glass-border);
-  color: var(--color-text-secondary);
-  font-size: 0.68rem;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  color: var(--color-text-tertiary);
+  font-size: 0.7rem;
   font-weight: 500;
-  padding: 0.15rem 0.4rem;
-  border-radius: 3px;
+  padding: 0.3rem 0.55rem;
+  min-height: 25px;
+  line-height: 1;
+  white-space: nowrap;
+  border-radius: var(--radius-xs);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: color var(--duration-fast) var(--ease-out), background var(--duration-fast) var(--ease-out);
 }
 
 .dlf-action-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text-primary);
+  background: var(--color-surface-hover);
 }
 
 .dlf-action-btn.approve:hover, .dlf-action-btn.approve.selected {
-  background: rgba(16, 185, 129, 0.15);
+  background: var(--color-success-bg);
   color: var(--color-success-text);
-  border-color: rgba(16, 185, 129, 0.3);
 }
 
 .dlf-action-btn.reject:hover, .dlf-action-btn.reject.selected {
-  background: rgba(244, 63, 94, 0.15);
+  background: var(--color-error-bg);
   color: var(--color-error-text);
-  border-color: rgba(244, 63, 94, 0.3);
 }
 
 .dlf-action-btn.edit:hover {
-  background: rgba(99, 102, 241, 0.15);
-  color: var(--accent-light);
-  border-color: rgba(99, 102, 241, 0.3);
+  background: var(--accent-subtle);
+  color: var(--accent);
 }
 
 .dlf-action-btn.ai-correct:hover {
-  background: rgba(14, 165, 233, 0.15);
-  color: #38bdf8;
-  border-color: rgba(14, 165, 233, 0.3);
+  background: var(--color-info-bg);
+  color: var(--color-info-text);
 }
 
 .dlf-action-btn .hotkey-hint {
   font-size: 0.58rem;
   color: var(--color-text-muted);
-  margin-left: 2px;
-  padding: 0 2px;
-  background: rgba(0, 0, 0, 0.25);
-  border-radius: 2px;
+  margin-left: 1px;
+  padding: 0;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .dlf-bulk-btn kbd,
+  .dlf-action-btn .hotkey-hint {
+    display: none;
+  }
 }

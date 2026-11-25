@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   Sparkles,
+  Settings,
   LayoutDashboard,
-  Save,
   Plus,
   Database,
   LogIn,
@@ -11,16 +11,19 @@ import {
   User as UserIcon,
   LogOut,
   UserCheck,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
-import { clearChat, addUserMessage, sendMessage } from '../../redux/chatSlice';
+import { clearChat } from '../../redux/chatSlice';
 import { clearLog } from '../../redux/logSlice';
 import { clearAgentState } from '../../redux/agentSlice';
 import { clearDocument } from '../../redux/documentSlice';
+import { toggleTheme } from '../../redux/uiSlice';
 import {
   openAuthModal,
   openProfileModal,
-  logout,
+  logoutUser,
 } from '../../redux/authSlice';
 import './Layout.css';
 
@@ -28,8 +31,10 @@ export const Header: React.FC = () => {
   const dispatch = useAppDispatch();
   const location = useLocation();
   const isCapturePage = location.pathname === '/';
-  const currentLog = useAppSelector((state) => state.log.currentLog);
   const { user, isAuthenticated } = useAppSelector((state) => state.auth);
+  const theme = useAppSelector((state) => state.ui.theme);
+
+  const handleToggleTheme = () => dispatch(toggleTheme());
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -48,23 +53,17 @@ export const Header: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const hasFields = Boolean(
-    currentLog &&
-      currentLog.fields &&
-      Object.keys(currentLog.fields).filter((k) => !k.startsWith('_')).length > 0
-  );
-
+  const hasContent = useAppSelector(state => Boolean(state.chat.messages.length || state.document.currentDocument || state.log.currentLog));
+  const saved = useAppSelector(state => state.log.savedLogReference);
+  const busy = useAppSelector(state => state.chat.loading || state.log.extractionStatus === 'extracting');
   const handleNewSession = () => {
+    if (hasContent && !saved && !window.confirm('Discard this draft and start a new record?')) return;
     dispatch(clearChat());
     dispatch(clearLog());
     dispatch(clearAgentState());
     dispatch(clearDocument());
   };
 
-  const handleSaveLog = () => {
-    dispatch(addUserMessage('Save the log'));
-    dispatch(sendMessage('Save the log') as any);
-  };
 
   const handleOpenLogin = () => {
     dispatch(openAuthModal('login'));
@@ -82,7 +81,7 @@ export const Header: React.FC = () => {
 
   const handleLogout = () => {
     setDropdownOpen(false);
-    dispatch(logout());
+    dispatch(logoutUser());
     dispatch(clearChat());
     dispatch(clearLog());
     dispatch(clearAgentState());
@@ -106,43 +105,45 @@ export const Header: React.FC = () => {
         </div>
         <div className="header-brand-wrap">
           <h1>Universal Log</h1>
-          <span className="header-badge">AI Capture Studio</span>
         </div>
       </div>
 
       <nav className="header-nav">
-        <NavLink to="/" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+        {/* `end` fixes the always-active "AI Capture" link — "/" matched every
+            route, so it stayed highlighted on /logs and 404 pages too */}
+        <NavLink to="/" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
           <Sparkles size={14} className="nav-icon" />
-          <span>AI Capture</span>
+          <span>Workspace</span>
         </NavLink>
-        <NavLink to="/logs" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+        <NavLink to="/logs" onClick={(event) => { if (!isAuthenticated) { event.preventDefault(); handleOpenLogin(); } }} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
           <LayoutDashboard size={14} className="nav-icon" />
-          <span>Dashboard</span>
+          <span>Saved records</span>
         </NavLink>
       </nav>
 
       <div className="header-right-actions">
-        {isCapturePage && hasFields && (
-          <button
-            className="header-save-btn"
-            onClick={handleSaveLog}
-            title="Save and commit current log to database (Ctrl + Enter)"
-          >
-            <Save size={14} />
-            <span>Save Log</span>
-          </button>
-        )}
-
-        {isCapturePage && (
+        <NavLink to="/settings" className="theme-toggle-btn" aria-label="Settings" title="Settings"><Settings size={16}/></NavLink>
+        {isCapturePage && hasContent && (
           <button
             className="new-session-btn"
-            onClick={handleNewSession}
+            aria-label="New record"
+            onClick={handleNewSession} disabled={busy}
             title="Clear the current session and start fresh"
           >
             <Plus size={14} className="new-session-icon" />
-            <span>New Session</span>
+            <span>New record</span>
           </button>
         )}
+
+        {/* Light / dark theme toggle — pastel grey default, black variant */}
+        <button
+          className="theme-toggle-btn"
+          onClick={handleToggleTheme}
+          title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+          aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+        >
+          {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
+        </button>
 
         {/* User Authentication & Profile Menu */}
         {isAuthenticated && user ? (
@@ -196,7 +197,7 @@ export const Header: React.FC = () => {
             title="Sign in or create account to save personal logs"
           >
             <LogIn size={14} />
-            <span>Sign In / Demo</span>
+            <span>Sign in</span>
           </button>
         )}
       </div>

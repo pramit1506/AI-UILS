@@ -1,5 +1,5 @@
 export interface FieldMetadata {
-  value?: any;
+  value?: unknown;
   confidence?: number;
   source?: string;
   last_updated?: string;
@@ -10,7 +10,7 @@ export type FieldReviewStatus = 'pending' | 'approved' | 'rejected' | 'edited';
 
 export interface FieldReviewState {
   status: FieldReviewStatus;
-  editedValue?: any;
+  editedValue?: unknown;
   rejectedReason?: string;
   lastModified?: string;
 }
@@ -23,7 +23,7 @@ export interface DynamicLogDraft {
   /** How the info arrived: "pdf", "email", "text" */
   source?: string;
   /** All extracted field-value pairs — fully dynamic */
-  fields?: Record<string, any>;
+  fields?: Record<string, unknown>;
   /** Per-field AI confidence metadata */
   field_metadata?: Record<string, FieldMetadata>;
 }

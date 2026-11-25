@@ -7,15 +7,19 @@ class Settings(BaseSettings):
     Application settings, loaded from environment variables.
 
     Multi-provider failover is enabled by setting LLM_PROVIDER=multi.
-    Each provider supports up to 3 numbered API keys (e.g. GROQ_API_KEY_1,
-    GROQ_API_KEY_2, GROQ_API_KEY_3). The LiteLLM Router cycles through all
-    configured keys automatically on 429/5xx errors — no manual intervention needed.
     """
     PROJECT_NAME: str = "AI-Powered Universal Logging System"
     API_VERSION: str = "v1"
     API_V1_STR: str = "/api/v1"
     DEBUG: bool = False
+    AUTH_COOKIE_SECURE: bool | None = None
     LOG_LEVEL: str = "INFO"
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_FROM: str = ""
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_IMPLICIT_TLS: bool = False
     SECRET_KEY: str = "uils_jwt_default_secret_key_change_in_production_min32bytes"
     CORS_ORIGINS: List[str] = [
         "http://localhost:5173",
@@ -28,10 +32,17 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str = "postgresql://user:password@localhost/dbname"
+    CHECKPOINTER_DB_PATH: str = "./data/checkpoints.sqlite3"
 
     # ── Core LLM Settings ──────────────────────────────────────────────────────
-    DEFAULT_MODEL: str = "qwen/qwen3.6-27b"
-    LANGGRAPH_ENABLED: bool = True
+    DEFAULT_MODEL: str = "qwen/qwen3.8-27b"  # Groq model, including single-key mode
+    GEMINI_MODEL: str = "gemini-3.8-flash"
+    GEMINI_FAST_MODEL: str = "gemini-3.5-flash-lite"
+    GROQ_FAST_MODEL: str = "openai/gpt-oss-20b"
+    OPENROUTER_MODEL: str = "google/gemma-4-31b-it:free"
+    OPENROUTER_FAST_MODEL: str = "google/gemma-4-26b-a4b-it:free"
+    GEMINI_FREE_TIER_CONFIRMED: bool = False
+    GROQ_FREE_TIER_CONFIRMED: bool = False
     MODEL_TIMEOUT: int = 30
     MAX_RETRIES: int = 3
     TEMPERATURE: float = 0.7
@@ -39,8 +50,8 @@ class Settings(BaseSettings):
     DEMO_OFFLINE_MODE: bool = False
 
     # ── LLM Provider Routing ───────────────────────────────────────────────────
-    # Options: "groq" (single key, default), "multi" (failover pool), "ollama" (local)
-    LLM_PROVIDER: str = "groq"
+    # Options: "groq" (single key), "multi" (default failover pool), "ollama" (local)
+    LLM_PROVIDER: str = "multi"
 
     # Ollama (local/private inference — no API key required)
     OLLAMA_BASE_URL: str = "http://localhost:11434"
@@ -55,11 +66,6 @@ class Settings(BaseSettings):
     GROQ_API_KEY_4: str = ""
     GROQ_API_KEY_5: str = ""
     GROQ_API_KEY_6: str = ""
-
-    # ── Cerebras API Keys ──────────────────────────────────────────────────────
-    CEREBRAS_API_KEY_1: str = ""
-    CEREBRAS_API_KEY_2: str = ""
-    CEREBRAS_API_KEY_3: str = ""
 
     # ── Google AI Studio (Gemini) API Keys ────────────────────────────────────
     GEMINI_API_KEY_1: str = ""
@@ -81,7 +87,6 @@ class Settings(BaseSettings):
 
     # ── Context Compression Settings ──────────────────────────────────────────
     CONTEXT_COMPRESSION_THRESHOLD: int = 10  # turns (= 20 messages)
-    FAST_ROUTER_MODEL: str = "groq/openai/gpt-oss-20b"
 
 
     model_config = SettingsConfigDict(

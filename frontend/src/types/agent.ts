@@ -11,15 +11,14 @@ export interface TimelineEvent {
 export interface ClarificationPayload {
   required: boolean;
   question?: string;
-  options?: string[];
   field_name?: string;
 }
 
 export interface ToolExecutionEvent {
   tool_name: string;
   status: ToolStatus;
-  input?: any;
-  result?: any;
+  input?: unknown;
+  result?: unknown;
   error?: string;
 }
 
@@ -34,6 +33,7 @@ export enum ConversationStatus {
 }
 
 export interface ToolExecutionResult {
+  tool_name?: string;
   status: string;
   created_resource_id?: string;
   success_message?: string;
@@ -44,7 +44,7 @@ export interface ClarificationState {
   tool_name: string;
   required_fields: string[];
   missing_fields: string[];
-  resolved_fields: Record<string, any>;
+  resolved_fields: Record<string, unknown>;
   clarification_reason?: string;
   original_request: string;
   status?: string;
@@ -52,6 +52,7 @@ export interface ClarificationState {
 }
 
 export interface DecisionOutput {
+  reset_context?: boolean;
   action: string;
   tool_readiness: string;
   selected_tool?: string;
@@ -64,15 +65,17 @@ export interface DecisionOutput {
 }
 
 export interface ConversationMetadata {
-  active_customer?: string;
-  active_hospital?: string;
-  active_log?: string;
-  last_followup?: string;
+  /** Canonical per-conversation turn/message counter (see backend) */
+  message_count?: number;
+  estimated_tokens?: number;
+  last_activity?: string;
   last_tool?: string;
-  conversation_start: string;
-  last_activity: string;
-  message_count: number;
-  estimated_tokens: number;
+  active_schema?: string;
+  active_log_reference?: string;
+  active_log_id?: string;
+  clarification_state_status?: string | null;
+  current_log_start_idx?: number;
+  awaiting_new_log_decision?: boolean;
 }
 
 export interface AgentState {
@@ -82,6 +85,6 @@ export interface AgentState {
   clarificationRequired: ClarificationPayload | null;
   currentStep: string | null;
   executionTimeline: TimelineEvent[];
-  lastToolResult: any | null;
+  lastToolResult: unknown;
   conversationStatus?: ConversationStatus;
 }

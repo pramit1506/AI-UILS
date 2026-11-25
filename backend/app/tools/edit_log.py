@@ -44,11 +44,23 @@ class EditLogTool(BaseTool):
     async def execute(self, context: ToolExecutionContext, **kwargs) -> dict:
         log_reference = kwargs["log_reference"]
         field_updates = kwargs.get("field_updates") or {}
+
+        if not context.current_user:
+            return {
+                "log_reference": log_reference,
+                "updated_fields": [],
+                "message": "Cannot edit log: no authenticated user in context.",
+            }
+
         context.logger.info(
             f"[{context.request_id}] EditLogTool: Updating {log_reference} with {list(field_updates.keys())}"
         )
 
-        record = await log_record_repository.get_by_reference(context.db, log_reference=log_reference)
+        # Security (IDOR fix): scope the lookup to the authenticated user's
+        # records. Previously any record could be read/modified by reference.
+        record = await log_record_repository.get_by_reference(
+            context.db, log_reference=log_reference, user_id=context.current_user.id
+        )
         if not record:
             return {
                 "log_reference": log_reference,

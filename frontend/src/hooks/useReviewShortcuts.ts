@@ -10,7 +10,7 @@ import {
   selectPrevField,
   setFieldStatus,
   toggleShortcutsModal,
-  setViewLayoutMode,
+
 } from '../redux/logSlice';
 import { setActiveHighlightField } from '../redux/documentSlice';
 
@@ -44,6 +44,11 @@ export function useReviewShortcuts(options: UseReviewShortcutsOptions = {}) {
           target.tagName === 'TEXTAREA' ||
           target.isContentEditable);
 
+      if (isShortcutsModalOpen) {
+        if (e.key === 'Escape') dispatch(toggleShortcutsModal());
+        return;
+      }
+      if (document.querySelector('[aria-modal="true"]') || target?.closest('[role="dialog"]')) return;
       // ── Handle Ctrl/Cmd+Enter (Commit / Save) even in input fields ──
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
@@ -51,19 +56,12 @@ export function useReviewShortcuts(options: UseReviewShortcutsOptions = {}) {
         return;
       }
 
-      // ── Close shortcuts modal on Escape ──
-      if (e.key === 'Escape') {
-        if (isShortcutsModalOpen) {
-          dispatch(toggleShortcutsModal());
-          return;
-        }
-      }
-
       // If user is currently typing in an input/textarea, do not intercept regular typing
       if (isInput) {
         return;
       }
 
+      if (e.ctrlKey || e.metaKey) return;
       // ── Bulk Shortcuts (with Shift or Alt) ──
       if (e.shiftKey || e.altKey) {
         const key = e.key.toUpperCase();
@@ -92,28 +90,6 @@ export function useReviewShortcuts(options: UseReviewShortcutsOptions = {}) {
           dispatch(resetFieldStatuses());
           return;
         }
-      }
-
-      // ── View Layout Switches (1, 2, 3, 4) ──
-      if (e.key === '1') {
-        e.preventDefault();
-        dispatch(setViewLayoutMode('side-by-side'));
-        return;
-      }
-      if (e.key === '2') {
-        e.preventDefault();
-        dispatch(setViewLayoutMode('review-focus'));
-        return;
-      }
-      if (e.key === '3') {
-        e.preventDefault();
-        dispatch(setViewLayoutMode('fields-only'));
-        return;
-      }
-      if (e.key === '4') {
-        e.preventDefault();
-        dispatch(setViewLayoutMode('chat-focus'));
-        return;
       }
 
       // ── Help Modal Shortcut (?) ──

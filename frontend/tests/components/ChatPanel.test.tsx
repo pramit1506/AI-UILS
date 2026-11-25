@@ -14,7 +14,7 @@ window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
 const renderWithRedux = (
   component: React.ReactElement,
-  preloadedState?: any
+  preloadedState?: Partial<import("../../src/redux/store").RootState>
 ) => {
   const store = configureStore({
     reducer: {
@@ -31,7 +31,7 @@ const renderWithRedux = (
 describe('ChatPanel Component', () => {
   it('renders EmptyState initially', () => {
     renderWithRedux(<ChatPanel />);
-    expect(screen.getByText('Document Intelligence')).toBeInTheDocument();
+    expect(screen.getByText('Add a document')).toBeInTheDocument();
   });
 
   it('dispatches message when sending', () => {
