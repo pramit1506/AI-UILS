@@ -8,7 +8,8 @@ export const CSRF_HEADER_NAME = 'x-csrf-token';
 
 export const apiClient = axios.create({
   baseURL,
-  timeout: 30000,
+  // A hosted free instance may take about a minute to wake on the first request.
+  timeout: import.meta.env.PROD ? 90_000 : 30_000,
   headers: {
     'Content-Type': 'application/json',
   },

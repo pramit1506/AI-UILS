@@ -69,7 +69,7 @@ async def lifespan(app: FastAPI):
     await init_database()
     from app.services.password_recovery import is_configured
     if not is_configured():
-        logger.warning("Password recovery email is disabled. Configure SMTP_HOST and SMTP_FROM.")
+        logger.warning("Password recovery email is disabled. Configure a sender and SMTP or Mailjet.")
     yield
     # Release resources created over the app's lifetime: LLM provider clients
     # (previously recreated per request without cleanup) and the persistent

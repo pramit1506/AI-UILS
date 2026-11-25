@@ -5,6 +5,7 @@ import hmac
 import secrets
 import smtplib
 import ssl
+import httpx
 
 from fastapi import BackgroundTasks, HTTPException
 from loguru import logger
@@ -17,8 +18,12 @@ from app.models.user import User
 from app.repositories.user_repository import user_repository
 
 
+def _mailjet_configured() -> bool:
+    return bool(settings.MAILJET_API_KEY.strip() and settings.MAILJET_API_SECRET.strip())
+
+
 def is_configured() -> bool:
-    return bool(settings.SMTP_HOST.strip() and settings.SMTP_FROM.strip())
+    return bool(settings.SMTP_FROM.strip() and (settings.SMTP_HOST.strip() or _mailjet_configured()))
 
 
 def send_code(recipient: str, code: str) -> None:
@@ -28,6 +33,26 @@ def send_code(recipient: str, code: str) -> None:
     message["Subject"] = "Your Universal Log password reset code"
     message.set_content(f"Enter {code} in Universal Log to reset your password. "
                         "This code expires in 10 minutes. If you did not request it, ignore this email.")
+    if _mailjet_configured():
+        try:
+            response = httpx.post(
+                "https://api.mailjet.com/v3.1/send",
+                auth=(settings.MAILJET_API_KEY, settings.MAILJET_API_SECRET),
+                json={"Messages": [{
+                    "From": {"Email": settings.SMTP_FROM.strip()},
+                    "To": [{"Email": recipient}],
+                    "Subject": str(message["Subject"]),
+                    "TextPart": message.get_content(),
+                }]},
+                timeout=10,
+            )
+            response.raise_for_status()
+            results = response.json().get("Messages", [])
+            if not results or results[0].get("Status") != "success":
+                logger.error("Mailjet did not accept the recovery email.")
+        except (httpx.HTTPError, ValueError):
+            logger.error("Recovery email delivery failed. Check Mailjet configuration and availability.")
+        return
     tls = ssl.create_default_context()
     try:
         if settings.SMTP_IMPLICIT_TLS:

@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_IMPLICIT_TLS: bool = False
+    MAILJET_API_KEY: str = ""
+    MAILJET_API_SECRET: str = ""
     SECRET_KEY: str = "uils_jwt_default_secret_key_change_in_production_min32bytes"
     CORS_ORIGINS: List[str] = [
         "http://localhost:5173",

@@ -262,6 +262,8 @@ See the [database notes](docs/database.md) for storage and migration details and
 
 ## Running with Docker Compose
 
+For a hosted personal pilot, see the [Vercel, Render, and Neon deployment guide](docs/deployment.md).
+
 To spin up the entire system (PostgreSQL, FastAPI Backend, and React Frontend) with Docker:
 
 Compose reads the private `backend/.env` and optional root `.env`. Set a strong

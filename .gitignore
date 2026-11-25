@@ -166,6 +166,7 @@ project_structure.txt
 .claude/
 .cursor/
 .windsurf/
+.vercel/
 /AUDIT-FIXES-REPORT.md
 /docs/product-review.md
 /docs/sandbox-e2e-report.md
