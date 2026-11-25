@@ -8,7 +8,6 @@ class Settings(BaseSettings):
 
     Multi-provider failover is enabled by setting LLM_PROVIDER=multi.
     """
-    PROJECT_NAME: str = "AI-Powered Universal Logging System"
     API_VERSION: str = "v1"
     API_V1_STR: str = "/api/v1"
     DEBUG: bool = False

@@ -1,6 +1,6 @@
 # Conversation API
 
-The AI-First Conversation API provides a unified interface for the frontend React application to interact with the backend UILS workflow. It is designed so that every chat interaction automatically returns both the conversational response and the latest structured dynamic log state.
+The AI-First Conversation API provides a unified interface for the frontend React application to interact with the Nikarsh AI backend workflow. It is designed so that every chat interaction automatically returns both the conversational response and the latest structured dynamic log state.
 
 ## Response Lifecycle
 

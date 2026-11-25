@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database, Sparkles, LogIn, UserPlus, X, ArrowRight } from 'lucide-react';
+import { Sparkles, LogIn, UserPlus, X, ArrowRight } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import { dismissEntryPrompt } from '../../redux/uiSlice';
 import { openAuthModal } from '../../redux/authSlice';
@@ -43,11 +43,9 @@ export const EntryPrompt: React.FC = () => {
         </button>
 
         <div className="entry-header">
-          <div className="entry-logo-badge">
-            <Database size={20} className="entry-logo-icon" />
-          </div>
+          <img className="entry-logo-badge" src="/brand/nikarsh-ai-192.png" alt="" width="46" height="46" />
           <div>
-            <h2 id="entry-title" className="entry-title">Welcome to Universal Log</h2>
+            <h2 id="entry-title" className="entry-title">Welcome to Nikarsh AI</h2>
             <p className="entry-tagline">Paste anything — the AI turns it into a verified, structured record.</p>
           </div>
         </div>

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import text
 from app.shared.responses import APIResponse
 from app.core.config import settings
-from app.core.constants import STATUS_OK
+from app.core.constants import APP_NAME, STATUS_OK
 from app.dependencies.db import get_db_session
 
 router = APIRouter()
@@ -11,9 +11,9 @@ router = APIRouter()
 def read_root():
     return APIResponse(
         success=True,
-        message=f"Welcome to the {settings.PROJECT_NAME} API",
+        message=f"Welcome to the {APP_NAME} API",
         data={
-            "project_name": settings.PROJECT_NAME,
+            "project_name": APP_NAME,
             "version": settings.API_VERSION
         }
     )

@@ -25,7 +25,7 @@ class SearchLogsTool(BaseTool):
     @property
     def description(self) -> str:
         return (
-            "Search the universal log ledger for previously saved records using natural language. "
+            "Search Nikarsh AI for previously saved records using natural language. "
             "Use this when the user asks to 'find', 'retrieve', 'look up', or 'recall' a past log. "
             "Can filter by document type (schema) and searches across all field values."
         )

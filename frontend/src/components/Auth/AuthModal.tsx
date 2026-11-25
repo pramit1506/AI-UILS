@@ -6,7 +6,6 @@ import {
   Mail,
   Lock,
   User as UserIcon,
-  Shield,
   AlertCircle,
   Eye,
   EyeOff,
@@ -182,13 +181,13 @@ export const AuthModal: React.FC = () => {
   const getHeaderSubtitle = () => {
     switch (authModalTab) {
       case 'login':
-        return 'Sign in to access your personal logs & sessions';
+        return 'Sign in to your Nikarsh AI workspace.';
       case 'register':
-        return 'Start capturing and verifying logs with your private profile';
+        return 'Create a Nikarsh AI account to save your records.';
       case 'reset-password':
         return isAuthenticated
           ? 'Verify your current password, then choose a new one'
-          : 'Use the email address associated with your account';
+          : 'Use the email address for your Nikarsh AI account.';
       case 'delete-account':
         return 'Account deletion requires signing in — it is done from your profile';
       default:
@@ -208,7 +207,7 @@ export const AuthModal: React.FC = () => {
             <div className={`auth-modal-icon-badge ${authModalTab === 'delete-account' ? 'danger' : ''}`}>
               {authModalTab === 'reset-password' && <KeyRound size={18} />}
               {authModalTab === 'delete-account' && <Trash2 size={18} />}
-              {authModalTab !== 'reset-password' && authModalTab !== 'delete-account' && <Shield size={18} />}
+              {authModalTab !== 'reset-password' && authModalTab !== 'delete-account' && <img src="/brand/nikarsh-ai-192.png" alt="" width="34" height="34" />}
             </div>
             <div>
               <h2>{getHeaderTitle()}</h2>

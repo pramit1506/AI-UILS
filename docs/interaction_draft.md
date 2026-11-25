@@ -1,6 +1,6 @@
 # Dynamic Log Draft
 
-The Dynamic Log Draft represents the AI's current, evolving understanding of the document or structured record throughout a conversational intake session in UILS. It serves as the single source of truth for the session state and dynamically populates the React UI form on the frontend.
+The Dynamic Log Draft represents the AI's current, evolving understanding of the document or structured record throughout a conversational intake session in Nikarsh AI. It serves as the single source of truth for the session state and dynamically populates the React UI form on the frontend.
 
 ## Architecture & Lifecycle
 

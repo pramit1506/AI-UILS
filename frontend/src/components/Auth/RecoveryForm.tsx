@@ -63,7 +63,9 @@ export function RecoveryForm({ onLogin }: { onLogin: () => void }) {
       onChange={e => setEmail(e.target.value)} /></label>
     {step === 'code' && <>
       <p role="status">{notice} Codes expire after 10 minutes.</p>
+      <p id="recovery-code-hint">Look for “Your Nikarsh AI password reset code” in your inbox. If you don’t see it, check your <strong>Spam or Junk</strong> folder.</p>
       <label className="auth-form-group">Six-digit code<input className="auth-input" autoComplete="one-time-code"
+        aria-describedby="recovery-code-hint"
         inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required value={code} onChange={e => setCode(e.target.value)} /></label>
       <label className="auth-form-group">New password<input className="auth-input" type="password" autoComplete="new-password"
         minLength={6} required value={password} onChange={e => setPassword(e.target.value)} /></label>

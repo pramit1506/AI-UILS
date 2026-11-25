@@ -609,7 +609,7 @@ const UserLogsDashboard: React.FC = () => {
     <div className="logs-dashboard">
       <div className="dashboard-header">
         <div className="dashboard-header-title-block">
-          <h2>Universal Logs Database</h2>
+          <h2>Saved records</h2>
           <p>Structured repository of all AI-extracted and verified records.</p>
         </div>
 

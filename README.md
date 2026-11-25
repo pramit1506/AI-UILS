@@ -1,4 +1,6 @@
-# AI-Powered Universal Information Logging System (AI-UILS)
+# Nikarsh AI
+
+<img src="frontend/public/brand/nikarsh-ai-192.png" alt="Nikarsh AI logo" width="80" height="80">
 
 A high-performance, domain-agnostic AI assistant and data capture platform that extracts structured information from unstructured text, documents, and natural language conversations, populating real-time editable records and persisting them into a flexible ledger.
 
@@ -6,7 +8,7 @@ A high-performance, domain-agnostic AI assistant and data capture platform that 
 
 ## Overview
 
-Traditional intake systems are rigid and bound to predefined schemas. **AI-UILS** is built to dynamically understand any document or unstructured input—such as invoices, medical records, resumes, contracts, incident reports, receipts, and customer inquiries—extract structured key-value pairs with confidence scoring, validate data integrity, and support interactive conversational refinement.
+Traditional intake systems are rigid and bound to predefined schemas. **Nikarsh AI** is built to dynamically understand any document or unstructured input—such as invoices, medical records, resumes, contracts, incident reports, receipts, and customer inquiries—extract structured key-value pairs with confidence scoring, validate data integrity, and support interactive conversational refinement.
 
 ---
 
@@ -196,7 +198,6 @@ See the [database notes](docs/database.md) for storage and migration details and
 
    Update `.env` with your settings:
    ```env
-   PROJECT_NAME="AI-Powered Universal Information Logging System"
    DATABASE_URL="postgresql+asyncpg://username:password@localhost:5432/database_name"
    GROQ_API_KEY=
    GEMINI_API_KEY_1=

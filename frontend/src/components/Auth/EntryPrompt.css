@@ -66,20 +66,9 @@
 }
 
 .entry-logo-badge {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 46px;
-  height: 46px;
+  display: block;
   flex-shrink: 0;
   border-radius: var(--radius-lg);
-  color: var(--accent);
-  background: var(--accent-subtle);
-  border: 1px solid var(--accent-border);
-}
-
-.entry-logo-icon {
-  color: var(--accent);
 }
 
 .entry-title {

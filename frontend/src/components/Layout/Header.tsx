@@ -5,7 +5,6 @@ import {
   Settings,
   LayoutDashboard,
   Plus,
-  Database,
   LogIn,
   ChevronDown,
   User as UserIcon,
@@ -90,11 +89,9 @@ export const Header: React.FC = () => {
   return (
     <header className="app-header">
       <div className="header-logo">
-        <div className="header-logo-badge">
-          <Database size={16} className="header-logo-icon" />
-        </div>
+        <img className="header-logo-badge" src="/brand/nikarsh-ai-192.png" alt="" width="32" height="32" />
         <div className="header-brand-wrap">
-          <h1>Universal Log</h1>
+          <h1>Nikarsh AI</h1>
         </div>
       </div>
 

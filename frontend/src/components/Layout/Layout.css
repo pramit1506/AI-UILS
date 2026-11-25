@@ -35,14 +35,9 @@
 }
 
 .header-logo-badge {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
+  display: block;
+  flex-shrink: 0;
   border-radius: var(--radius-sm);
-  background: var(--accent-subtle);
-  color: var(--accent);
 }
 
 .header-brand-wrap {

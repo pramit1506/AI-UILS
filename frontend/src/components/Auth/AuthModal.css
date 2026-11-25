@@ -64,6 +64,8 @@
 }
 
 .auth-modal-icon-badge {
+  overflow: hidden;
+  flex-shrink: 0;
   width: 34px;
   height: 34px;
   border-radius: 8px;

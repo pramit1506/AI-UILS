@@ -33,7 +33,7 @@ class SaveLogTool(BaseTool):
     @property
     def description(self) -> str:
         return (
-            "Save the extracted log data into the universal ledger. "
+            "Save the extracted fields as a record in Nikarsh AI. "
             "Use this when the user wants to save, log, record, or store the current document data. "
             "Works for any document type: invoices, resumes, contracts, medical forms, receipts, etc."
         )
@@ -153,5 +153,5 @@ class SaveLogTool(BaseTool):
             "log_reference": record.log_reference,
             "schema_name": record.schema_name,
             "status": "success",
-            "message": f"Log saved successfully to the universal ledger. Reference: {log_reference}",
+            "message": f"Record saved in Nikarsh AI. Reference: {log_reference}",
         }

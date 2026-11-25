@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
+from email.utils import formataddr, parseaddr
 import hashlib
 import hmac
 import secrets
@@ -13,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.constants import APP_NAME
 from app.core.security import get_password_hash
 from app.models.user import User
 from app.repositories.user_repository import user_repository
@@ -28,10 +30,11 @@ def is_configured() -> bool:
 
 def send_code(recipient: str, code: str) -> None:
     message = EmailMessage()
-    message["From"] = settings.SMTP_FROM
+    sender = parseaddr(settings.SMTP_FROM.strip())[1]
+    message["From"] = formataddr((APP_NAME, sender))
     message["To"] = recipient
-    message["Subject"] = "Your Universal Log password reset code"
-    message.set_content(f"Enter {code} in Universal Log to reset your password. "
+    message["Subject"] = f"Your {APP_NAME} password reset code"
+    message.set_content(f"Enter {code} in {APP_NAME} to reset your password. "
                         "This code expires in 10 minutes. If you did not request it, ignore this email.")
     if _mailjet_configured():
         try:
@@ -39,7 +42,7 @@ def send_code(recipient: str, code: str) -> None:
                 "https://api.mailjet.com/v3.1/send",
                 auth=(settings.MAILJET_API_KEY, settings.MAILJET_API_SECRET),
                 json={"Messages": [{
-                    "From": {"Email": settings.SMTP_FROM.strip()},
+                    "From": {"Email": sender, "Name": APP_NAME},
                     "To": [{"Email": recipient}],
                     "Subject": str(message["Subject"]),
                     "TextPart": message.get_content(),

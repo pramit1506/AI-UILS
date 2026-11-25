@@ -10,6 +10,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app.core.config import settings
+from app.core.constants import APP_NAME
 from app.core.logging_config import setup_logging
 from app.core.security import AUTH_COOKIE_NAME, CSRF_COOKIE_NAME, CSRF_HEADER_NAME
 from app.api.v1.api import api_router
@@ -65,7 +66,7 @@ async def lifespan(app: FastAPI):
     _validate_security_config()
     if settings.AUTH_COOKIE_SECURE is False:
         logger.info("Session cookies permit HTTP. Use this configuration only on a local loopback listener.")
-    logger.info(f"Starting {settings.PROJECT_NAME}...")
+    logger.info(f"Starting {APP_NAME}...")
     await init_database()
     from app.services.password_recovery import is_configured
     if not is_configured():
@@ -74,7 +75,7 @@ async def lifespan(app: FastAPI):
     # Release resources created over the app's lifetime: LLM provider clients
     # (previously recreated per request without cleanup) and the persistent
     # checkpointer's SQLite connection.
-    logger.info(f"Shutting down {settings.PROJECT_NAME}...")
+    logger.info(f"Shutting down {APP_NAME}...")
     from app.llm.factory import shutdown_llm_clients
     from app.dependencies.graph import shutdown_graph
     try:
@@ -116,7 +117,7 @@ def _validate_security_config() -> None:
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title=settings.PROJECT_NAME,
+        title=APP_NAME,
         version=settings.API_VERSION,
         openapi_url=f"{settings.API_V1_STR}/openapi.json",
         lifespan=lifespan,

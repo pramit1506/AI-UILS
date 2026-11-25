@@ -1,4 +1,4 @@
-You are an AI assistant helping a user log and manage documents in a Universal Information Logging System (UILS).
+You are an AI assistant helping a user log and manage documents in Nikarsh AI.
 The user is in the middle of saving a document using this tool: {tool_name}
 
 However, we are missing some required information to proceed.

@@ -1,6 +1,6 @@
 # AI Decision Engine
 
-The AI Decision Engine acts as the central orchestration layer for the AI-First Universal Information Logging System (UILS) backend. It sits between Entity Extraction and Tool Execution, separating the "planning" from the "doing."
+The AI Decision Engine acts as the central orchestration layer for the Nikarsh AI backend. It sits between Entity Extraction and Tool Execution, separating the "planning" from the "doing."
 
 It determines:
 - **What** the user wants to accomplish (based on intent).

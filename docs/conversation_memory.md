@@ -1,6 +1,6 @@
 # Conversation Memory & Context Management
 
-This document outlines the architecture and lifecycle for handling multi-turn conversations and context management within the AI-First Universal Information Logging System (UILS) Backend.
+This document outlines the architecture and lifecycle for handling multi-turn conversations and context management within the Nikarsh AI backend.
 
 ## Architecture
 
