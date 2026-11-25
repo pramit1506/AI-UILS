@@ -42,3 +42,10 @@ store.subscribe(() => {
 });
 
 export type AppDispatch = typeof store.dispatch;
+
+export const startNewRecord = () => (dispatch: AppDispatch) => {
+  dispatch(clearChat());
+  dispatch(clearLog());
+  dispatch(clearAgentState());
+  dispatch(clearDocument());
+};

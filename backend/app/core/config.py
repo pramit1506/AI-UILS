@@ -41,8 +41,8 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-3.8-flash"
     GEMINI_FAST_MODEL: str = "gemini-3.5-flash-lite"
     GROQ_FAST_MODEL: str = "openai/gpt-oss-20b"
-    OPENROUTER_MODEL: str = "google/gemma-4-31b-it:free"
-    OPENROUTER_FAST_MODEL: str = "google/gemma-4-26b-a4b-it:free"
+    OPENROUTER_MODEL: str = "baidu/ernie-5.5-flash-preview:free"
+    OPENROUTER_FAST_MODEL: str = "baidu/ernie-5.5-flash-preview:free"
     GEMINI_FREE_TIER_CONFIRMED: bool = False
     GROQ_FREE_TIER_CONFIRMED: bool = False
     MODEL_TIMEOUT: int = 30

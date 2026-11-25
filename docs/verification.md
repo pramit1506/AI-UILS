@@ -8,3 +8,5 @@ The production frontend build and the live sandbox were verified with fictional 
 - **Deployment** checks covered the live Nginx and Docker Compose stack. Readiness returned 503 with PostgreSQL stopped and 200 after recovery.
 
 The combined live run recorded 48 passing checks. With 10,000 synthetic records, a focused loopback test of 64 search requests at concurrency eight measured a p95 of 212 ms. These are sandbox measurements. External SMTP delivery, native mobile devices, screen readers, and production load require separate verification.
+
+On November 25, 2026, a disposable account saved a sample invoice in the local PostgreSQL sandbox. Edge displayed the compact receipt at 1280px and 390px. Expanding the receipt retrieved the stored fields, and starting a new record preserved the invoice in the library. In separate live OpenRouter calls, ERNIE 5.5 Flash Preview correctly extracted nested receipt items and classified a search request. Both requests reported zero cost. The two free Gemma backup routes returned HTTP 429 during the sample check.

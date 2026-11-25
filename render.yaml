@@ -24,5 +24,9 @@ services:
         value: /tmp/uils-checkpoints.sqlite3
       - key: LLM_PROVIDER
         value: multi
+      - key: OPENROUTER_MODEL
+        value: "baidu/ernie-5.5-flash-preview:free"
+      - key: OPENROUTER_FAST_MODEL
+        value: "baidu/ernie-5.5-flash-preview:free"
       - key: LITELLM_LOCAL_MODEL_COST_MAP
         value: "True"

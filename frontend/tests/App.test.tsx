@@ -29,6 +29,14 @@ describe('Capture workflow', () => {
       expect(await screen.findByRole('heading', { name: 'Record saved' })).toBeVisible();
       expect(send).toHaveBeenCalledTimes(1);
       expect(send.mock.calls[0][0]).toMatchObject({ action: 'save_reviewed', log_draft: { fields: { quantity: 7 } } });
+      const newRecord = screen.getByRole('button', { name: 'New record' });
+      const viewRecords = screen.getByRole('link', { name: 'View saved records' });
+      expect(newRecord.compareDocumentPosition(viewRecords) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Show saved fields' })).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByRole('group', { name: 'Bulk review actions' })).toBeNull();
+      fireEvent.click(newRecord);
+      expect(screen.getByRole('heading', { name: 'Capture a record' })).toBeVisible();
+      expect(store.getState().log.currentLog).toBeNull();
     } finally {
       send.mockRestore();
     }

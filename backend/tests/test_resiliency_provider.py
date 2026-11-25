@@ -92,14 +92,15 @@ class TestKeyPoolConstruction:
     def test_priority_and_distinct_keys(self, role):
         from app.llm.providers.resiliency_provider import _build_model_list
         slots = [m["litellm_params"] for m in _build_model_list() if m["model_name"] == role]
-        expected = [("gemini", 0)] * 2
+        expected = [("openrouter", 0), ("openrouter", 1)] + [("gemini", 2)] * 2
         if role == "agent-core":
-            expected += [("gemini", 1)] * 2
-        expected += [("groq", 2), ("groq", 2), ("openrouter", 3), ("openrouter", 4)]
+            expected += [("gemini", 3)] * 2
+        expected += [("groq", 4)] * 2
         assert [(p["model"].split("/")[0], p["order"]) for p in slots] == expected
         assert len({(p["model"], p["api_key"]) for p in slots}) == len(slots)
-        assert slots[-1]["model"].endswith(":free")
-        assert slots[-1]["extra_body"]["provider"]["max_price"] == {"request": 0, "prompt": 0, "completion": 0}
+        for slot in slots[:2]:
+            assert slot["model"].endswith(":free")
+            assert slot["extra_body"]["provider"]["max_price"] == {"request": 0, "prompt": 0, "completion": 0}
 
     def test_unconfirmed_plans_use_only_free_openrouter(self, patch_settings):
         from app.llm.providers.resiliency_provider import _build_model_list
@@ -176,9 +177,10 @@ class TestFailover:
         async def complete(**kwargs):
             provider = kwargs["model"].split("/")[0]
             attempted.append(provider)
-            if provider != "openrouter":
+            if provider == "openrouter":
+                assert kwargs["extra_body"]["provider"]["max_price"]["request"] == 0
+            if provider != "groq":
                 raise litellm.ServiceUnavailableError("simulated outage", provider, kwargs["model"])
-            assert kwargs["extra_body"]["provider"]["max_price"]["request"] == 0
             return litellm.ModelResponse(choices=[{"message": {"role": "assistant", "content": "OK"}}])
 
         monkeypatch.setattr(litellm, "acompletion", complete)
@@ -186,7 +188,7 @@ class TestFailover:
         result = await router.generate_response([{"role": "user", "content": "ping"}], model=role)
         assert result == "OK"
         gemini_attempts = 2 if role == "agent-core" else 1
-        assert attempted == ["gemini"] * gemini_attempts + ["groq", "openrouter"]
+        assert attempted == ["openrouter", "openrouter"] + ["gemini"] * gemini_attempts + ["groq"]
 
     async def test_raises_all_providers_exhausted_on_pool_failure(self):
         from app.llm.providers.resiliency_provider import ResiliencyProvider, _translate_litellm_exc

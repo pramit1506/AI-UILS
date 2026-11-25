@@ -64,26 +64,26 @@ def _collect_keys(attr_prefix: str) -> List[str]:
 def _build_model_list() -> List[Dict[str, Any]]:
     """Use each distinct key once per role and balance keys within each priority."""
     roles = ("agent-core", "fast-router")
-    routes = []
+    routes = [
+        ("openrouter", 0, (settings.OPENROUTER_MODEL, settings.OPENROUTER_FAST_MODEL)),
+        ("openrouter", 1, ("google/gemma-4-31b-it:free", "google/gemma-4-26b-a4b-it:free")),
+    ]
     if settings.GEMINI_FREE_TIER_CONFIRMED:
         routes.extend([
-            ("gemini", 0, (settings.GEMINI_MODEL, settings.GEMINI_FAST_MODEL)),
-            ("gemini", 1, (settings.GEMINI_FAST_MODEL, None)),
+            ("gemini", 2, (settings.GEMINI_MODEL, settings.GEMINI_FAST_MODEL)),
+            ("gemini", 3, (settings.GEMINI_FAST_MODEL, None)),
         ])
     if settings.GROQ_FREE_TIER_CONFIRMED:
-        routes.append(("groq", 2, (settings.DEFAULT_MODEL, settings.GROQ_FAST_MODEL)))
-    reserve = "particle-ai/particle-1:free"
-    routes.extend([
-        ("openrouter", 3, (settings.OPENROUTER_MODEL, settings.OPENROUTER_FAST_MODEL)),
-        ("openrouter", 4, (reserve, reserve)),
-    ])
+        routes.append(("groq", 4, (settings.DEFAULT_MODEL, settings.GROQ_FAST_MODEL)))
 
     deployments = []
+    seen = set()
     for provider, priority, models in routes:
         keys = _collect_keys(f"{provider.upper()}_API_KEY")
         for role, model in zip(roles, models):
-            if model is None:
+            if model is None or (provider, role, model) in seen:
                 continue
+            seen.add((provider, role, model))
             if provider == "openrouter" and not model.endswith(":free"):
                 raise ValueError("OpenRouter requires an explicit :free model for both roles.")
             for key in keys:

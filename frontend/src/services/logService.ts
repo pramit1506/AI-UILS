@@ -51,8 +51,8 @@ export const logService = {
     return page.records;
   },
   
-  getLog: async (logReference: string): Promise<LogRecord> => {
-    const response = await apiClient.get(`/logs/${logReference}`);
+  getLog: async (logReference: string, signal?: AbortSignal): Promise<LogRecord> => {
+    const response = await apiClient.get(`/logs/${encodeURIComponent(logReference)}`, { signal });
     return response.data.data;
   },
 

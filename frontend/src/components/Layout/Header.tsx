@@ -15,10 +15,7 @@ import {
   Moon,
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
-import { clearChat } from '../../redux/chatSlice';
-import { clearLog } from '../../redux/logSlice';
-import { clearAgentState } from '../../redux/agentSlice';
-import { clearDocument } from '../../redux/documentSlice';
+import { startNewRecord } from '../../redux/store';
 import { toggleTheme } from '../../redux/uiSlice';
 import {
   openAuthModal,
@@ -57,11 +54,7 @@ export const Header: React.FC = () => {
   const saved = useAppSelector(state => state.log.savedLogReference);
   const busy = useAppSelector(state => state.chat.loading || state.log.extractionStatus === 'extracting');
   const handleNewSession = () => {
-    if (hasContent && !saved && !window.confirm('Discard this draft and start a new record?')) return;
-    dispatch(clearChat());
-    dispatch(clearLog());
-    dispatch(clearAgentState());
-    dispatch(clearDocument());
+    if (window.confirm('Discard this draft and start a new record?')) dispatch(startNewRecord());
   };
 
 
@@ -82,10 +75,7 @@ export const Header: React.FC = () => {
   const handleLogout = () => {
     setDropdownOpen(false);
     dispatch(logoutUser());
-    dispatch(clearChat());
-    dispatch(clearLog());
-    dispatch(clearAgentState());
-    dispatch(clearDocument());
+    dispatch(startNewRecord());
   };
 
   const userInitials = user
@@ -123,7 +113,7 @@ export const Header: React.FC = () => {
 
       <div className="header-right-actions">
         <NavLink to="/settings" className="theme-toggle-btn" aria-label="Settings" title="Settings"><Settings size={16}/></NavLink>
-        {isCapturePage && hasContent && (
+        {isCapturePage && hasContent && !saved && (
           <button
             className="new-session-btn"
             aria-label="New record"

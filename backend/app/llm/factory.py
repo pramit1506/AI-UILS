@@ -50,8 +50,8 @@ def get_llm_provider() -> BaseLLMProvider:
     (chat.py passes `llm_provider=get_llm_provider()` into every
     ToolExecutionContext; this returns the same instance each time).
 
-    Multi mode uses confirmed free Gemini and Groq accounts, followed by
-    explicitly free OpenRouter endpoints. Groq and Ollama single-provider
+    Multi mode starts with explicitly free OpenRouter endpoints, then tries
+    confirmed free Gemini and Groq accounts. Groq and Ollama single-provider
     modes remain available through LLM_PROVIDER.
     """
     global _PROVIDER

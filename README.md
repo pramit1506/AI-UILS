@@ -18,7 +18,7 @@ Traditional intake systems are rigid and bound to predefined schemas. **AI-UILS*
 - **Proactive Clarification Engine**: The AI detects missing critical information and prompts the user with targeted questions.
 - **Review Queue & Confidence Badging**: Flags low-confidence extractions (`< 0.75`) for human-in-the-loop review with quick-action review workflows.
 - **Document search** searches a signed-in user's saved fields, summaries, filenames and retained source text using an inverted index in PostgreSQL.
-- **Flexible LLM Provider Support**: Gemini-first routing with Groq and OpenRouter fallbacks, plus local inference through Ollama.
+- **Flexible LLM Provider Support**: OpenRouter first, Gemini second and Groq Cloud third, plus local inference through Ollama.
 - **Document intake and review**: Upload PDF, DOCX, TXT, or EML files, paste text, or try a built-in sample. Review the proposed fields alongside the original and sign in to save a record.
 - **Account and workspace settings**: Reset a forgotten password with an emailed code. Choose a palette, display mode, and search preference.
 
@@ -207,11 +207,11 @@ See the [database notes](docs/database.md) for storage and migration details and
 
    Generate a unique signing key with `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
    Enter credentials only in the private backend environment or the project-root
-   `.env` for Docker Compose. Uncomment and fill the provider slots you use. In multi-provider mode the order is Gemini, Groq,
-   then OpenRouter. Flash handles document extraction and Flash-Lite handles
-   intent and compression. Flash-Lite also backs up extraction if Flash is unavailable. Groq uses Qwen 3.8 27B and GPT-OSS 20B for those
-   roles respectively. OpenRouter uses explicitly free Gemma models and Particle-1 as a final fallback, with a zero
-   maximum price per input token, output token and request.
+   `.env` for Docker Compose. Uncomment and fill the provider slots you use.
+   In multi-provider mode, OpenRouter tries ERNIE 5.5 Flash Preview first for extraction and short tasks.
+   Its backups are Gemma 4 31B for extraction and Gemma 4 26B A4B for short tasks.
+   Each OpenRouter request requires a `:free` model and a zero maximum price for input, output and requests.
+   When those routes are unavailable, the app tries Gemini and then Groq Cloud.
 
    Check every configured Gemini project's plan in Google AI Studio and every
    Groq organization's plan in Groq Console. Set `GEMINI_FREE_TIER_CONFIRMED`
