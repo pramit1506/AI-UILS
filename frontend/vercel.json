@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/api/:path(.*)",
+      "destination": "https://ai-uils-api.onrender.com/api/:path"
+    },
+    { "source": "/logs", "destination": "/index.html" },
+    { "source": "/settings", "destination": "/index.html" }
+  ]
+}

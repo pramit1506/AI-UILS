@@ -17,8 +17,8 @@ The hosted layout is **Vercel Hobby → Render Free → Neon Free**. Use the rep
 
 ## 3. Deploy the web app
 
-1. On [Vercel](https://vercel.com/new), import the same GitHub repository under a Hobby scope. Set **Root Directory** to `frontend`, **Framework** to Vite, and **Production Branch** to `AI-UILS`.
-2. Set the Vercel project variable `RENDER_API_ORIGIN` to the assigned HTTPS Render origin, without an `/api` suffix. The checked-in Vercel configuration forwards same-origin `/api/` requests and serves the React routes. Keep `VITE_API_BASE_URL` unset or use `/api/v1` so the browser can use the session cookies through the Vercel URL.
+1. On [Vercel](https://vercel.com/new), import the same GitHub repository under a Hobby scope. Set **Root Directory** to `frontend`, **Framework** to Vite, and **Production Branch** to `AI-UILS`. If Vercel selects `main`, change branch tracking in **Settings → Environments → Production**, then create a deployment from `AI-UILS`. [Production branch settings](https://vercel.com/docs/git#production-branch)
+2. The checked-in [Vercel configuration](../frontend/vercel.json) forwards same-origin `/api/` requests to the pilot's Render service and serves the React routes. If the API service gets a different Render URL, update the first rewrite's destination in `frontend/vercel.json` and deploy the commit. Keep `VITE_API_BASE_URL` unset or use `/api/v1` so the browser can use the session cookies through the Vercel URL.
 3. Deploy. Open the assigned `vercel.app` URL. A cold Render instance can take about a minute to wake. If a first click times out while the service wakes, wait for readiness and retry from the same tab. Vercel allows up to 120 seconds for external proxy requests. [Vercel Hobby terms](https://vercel.com/docs/limits/fair-use-guidelines) · [Proxy timeout](https://vercel.com/docs/limits#proxied-request-timeout)
 
 ## 4. Verify the release
